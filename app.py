@@ -76,17 +76,17 @@ st.title("📈 Aktieanalys med Databas")
 
 # 1. Lägg till nytt bolag
 with st.expander("➕ Lägg till nytt bolag"):
-    with st.form("add_company_form"):
-        bolag = st.text_input("Bolagsnamn")
-        kurs = st.number_input("Nuvarande kurs", min_value=0.0)
+    with st.form("add_company_form", clear_on_submit=True):  # clear_on_submit tömmer formuläret automatiskt efter submit
+        bolag = st.text_input("Bolagsnamn", key="bolag_input")
+        kurs = st.number_input("Nuvarande kurs", min_value=0.0, key="kurs_input")
 
-        pe = [st.number_input(f"P/E {i+1}", min_value=0.0, key=f"pe{i}") for i in range(4)]
-        ps = [st.number_input(f"P/S {i+1}", min_value=0.0, key=f"ps{i}") for i in range(4)]
+        pe = [st.number_input(f"P/E {i+1}", min_value=0.0, key=f"pe{i}_input") for i in range(4)]
+        ps = [st.number_input(f"P/S {i+1}", min_value=0.0, key=f"ps{i}_input") for i in range(4)]
 
-        vinst_i_ar = st.number_input("Vinstprognos i år", min_value=0.0)
-        vinst_nasta_ar = st.number_input("Vinstprognos nästa år", min_value=0.0)
-        oms_i_ar = st.number_input("Omsättningstillväxt i år", min_value=0.0)
-        oms_nasta_ar = st.number_input("Omsättningstillväxt nästa år", min_value=0.0)
+        vinst_i_ar = st.number_input("Vinstprognos i år", min_value=0.0, key="vinst_ar_input")
+        vinst_nasta_ar = st.number_input("Vinstprognos nästa år", min_value=0.0, key="vinst_nasta_ar_input")
+        oms_i_ar = st.number_input("Omsättningstillväxt i år", min_value=0.0, key="oms_i_ar_input")
+        oms_nasta_ar = st.number_input("Omsättningstillväxt nästa år", min_value=0.0, key="oms_nasta_ar_input")
 
         submitted = st.form_submit_button("💾 Spara bolag")
         if submitted:
@@ -143,7 +143,6 @@ else:
         st.subheader("🟢 Mest undervärderade bolag (≥ 30%)")
         for _, row in undervarderade.iterrows():
             st.markdown(f"**{row['bolag']}** – {row['Undervärdering %']:.1f}% undervärderad, mål: {row['Target genomsnitt']:.2f} kr")
-
     else:
         st.info("Inga bolag är just nu undervärderade med ≥ 30%.")
 

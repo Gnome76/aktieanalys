@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-from io import BytesIO
 
 # --- Databas setup ---
 
@@ -59,9 +58,19 @@ def uppdatera_bolag(bolag_id, bolag, kurs, pe, ps, vinst_ar, vinst_nasta_ar, oms
 
 def safe_float(val):
     try:
+        if val is None:
+            return 0.0
         return float(val)
     except (TypeError, ValueError):
         return 0.0
+
+def safe_str(val):
+    try:
+        if val is None:
+            return ""
+        return str(val).strip()
+    except Exception:
+        return ""
 
 def berakna_target(df):
     df = df.copy()
@@ -100,10 +109,11 @@ with st.expander("➕ Lägg till nytt bolag"):
         submit = st.form_submit_button("💾 Spara bolag")
 
         if submit:
-            if bolag.strip() == "":
+            bolag_clean = safe_str(bolag).capitalize()
+            if bolag_clean == "":
                 st.warning("Ange ett bolagsnamn!")
             else:
-                ok, msg = lagg_till_bolag(bolag.strip().capitalize(), kurs, pe, ps, vinst_i_ar, vinst_nasta_ar, oms_i_ar, oms_nasta_ar)
+                ok, msg = lagg_till_bolag(bolag_clean, kurs, pe, ps, vinst_i_ar, vinst_nasta_ar, oms_i_ar, oms_nasta_ar)
                 if ok:
                     st.success(msg)
                 else:
@@ -123,7 +133,7 @@ if not df.empty:
 
         with st.form("edit_form"):
             bolag_id = bolag_data['id']
-            bolag = st.text_input("Bolagsnamn", value=bolag_data['bolag'], key="edit_bolag")
+            bolag = st.text_input("Bolagsnamn", value=safe_str(bolag_data['bolag']), key="edit_bolag")
             kurs = st.number_input("Nuvarande kurs", min_value=0.0, value=safe_float(bolag_data['nuvarande_kurs']), key="edit_kurs")
 
             pe = [
@@ -143,9 +153,13 @@ if not df.empty:
             uppdatera = st.form_submit_button("💾 Uppdatera bolag")
 
             if uppdatera:
-                uppdatera_bolag(bolag_id, bolag.strip().capitalize(), kurs, pe, ps, vinst_i_ar, vinst_nasta_ar, oms_i_ar, oms_nasta_ar)
-                st.success(f"✅ {bolag} uppdaterat!")
-                st.experimental_rerun()
+                bolag_clean = safe_str(bolag).capitalize()
+                if bolag_clean == "":
+                    st.warning("Ange ett bolagsnamn!")
+                else:
+                    uppdatera_bolag(bolag_id, bolag_clean, kurs, pe, ps, vinst_i_ar, vinst_nasta_ar, oms_i_ar, oms_nasta_ar)
+                    st.success(f"✅ {bolag_clean} uppdaterat!")
+                    st.experimental_rerun()
 else:
     st.info("Inga bolag att visa/redigera ännu.")
 

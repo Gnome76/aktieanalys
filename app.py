@@ -63,11 +63,12 @@ if not st.session_state.data.empty:
         färg = "🟢" if row["Undervärdering %"] >= 30 else "⚪️" if row["Undervärdering %"] > 0 else "🔴"
         st.markdown(f"""
         ### {row['Bolag']} {färg}
-        - **Nuvarande kurs:** {row['Nuvarande kurs']:.2f} kr
-        - **Target P/E-kurs:** {row['Target P/E']:.2f} kr
-        - **Target P/S-kurs:** {row['Target P/S']:.2f} kr
-        - **Snitt-target:** {row['Target genomsnitt']:.2f} kr
-        - **Undervärdering:** {row['Undervärdering %']:.1f} %
+        - **Nuvarande kurs:** {row['Nuvarande kurs']:.2f} kr  
+        - 🧮 **Target baserat på P/E:** {row['Target P/E']:.2f} kr  
+        - 🧮 **Target baserat på P/S:** {row['Target P/S']:.2f} kr  
+        - 🟨 **Genomsnittlig targetkurs (P/E + P/S / 2):**  
+          👉 **{row['Target genomsnitt']:.2f} kr**
+        - 📉 **Undervärdering:** {row['Undervärdering %']:.1f} %
         """, unsafe_allow_html=True)
 
     # Lista undervärderade bolag

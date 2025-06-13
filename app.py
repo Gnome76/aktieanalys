@@ -4,7 +4,6 @@ import pandas as pd
 
 DB_NAME = "aktier.db"
 
-# --- Initiera databasen ---
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -23,7 +22,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-# --- Lägg till eller uppdatera bolag ---
 def add_or_update_bolag(data):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -47,7 +45,6 @@ def add_or_update_bolag(data):
     conn.commit()
     conn.close()
 
-# --- Hämta alla bolag ---
 def get_all_bolag():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -56,15 +53,6 @@ def get_all_bolag():
     conn.close()
     return rows
 
-# --- Ta bort bolag ---
-def delete_bolag(bolagsnamn):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('DELETE FROM bolag WHERE bolag=?', (bolagsnamn,))
-    conn.commit()
-    conn.close()
-
-# --- Beräkningar ---
 def genomsnitt(values):
     vals = [v for v in values if v is not None]
     return sum(vals)/len(vals) if vals else None
@@ -81,43 +69,64 @@ def targetkurs_ps(ps_values, oms):
         return None
     return ps_avg * oms
 
-# --- Streamlit-app ---
 def main():
     st.title("Aktieanalys med databashantering")
 
     init_db()
 
-    # --- Form för nytt bolag ---
+    # Session state för att hålla fälten
+    if "form_data" not in st.session_state:
+        st.session_state.form_data = {
+            "bolag": "",
+            "nuvarande_kurs": 0.0,
+            "pe1": 0.0,
+            "pe2": 0.0,
+            "pe3": 0.0,
+            "pe4": 0.0,
+            "ps1": 0.0,
+            "ps2": 0.0,
+            "ps3": 0.0,
+            "ps4": 0.0,
+            "vinst_ar": 0.0,
+            "vinst_nasta_ar": 0.0,
+            "oms_i_ar": 0.0,
+            "oms_nasta_ar": 0.0
+        }
+
+    def reset_form():
+        for key in st.session_state.form_data.keys():
+            st.session_state.form_data[key] = "" if isinstance(st.session_state.form_data[key], str) else 0.0
+
     with st.form("form_lagg_till"):
         st.subheader("Lägg till eller uppdatera bolag")
 
-        bolag = st.text_input("Bolagsnamn (unik identifierare)").strip()
-        nuvarande_kurs = st.number_input("Nuvarande kurs", min_value=0.0, format="%.2f")
+        bolag = st.text_input("Bolagsnamn (unik identifierare)", st.session_state.form_data["bolag"])
+        nuvarande_kurs = st.number_input("Nuvarande kurs", min_value=0.0, format="%.2f", value=st.session_state.form_data["nuvarande_kurs"])
 
-        pe1 = st.number_input("P/E år -4", min_value=0.0, format="%.2f")
-        pe2 = st.number_input("P/E år -3", min_value=0.0, format="%.2f")
-        pe3 = st.number_input("P/E år -2", min_value=0.0, format="%.2f")
-        pe4 = st.number_input("P/E år -1", min_value=0.0, format="%.2f")
+        pe1 = st.number_input("P/E år -4", min_value=0.0, format="%.2f", value=st.session_state.form_data["pe1"])
+        pe2 = st.number_input("P/E år -3", min_value=0.0, format="%.2f", value=st.session_state.form_data["pe2"])
+        pe3 = st.number_input("P/E år -2", min_value=0.0, format="%.2f", value=st.session_state.form_data["pe3"])
+        pe4 = st.number_input("P/E år -1", min_value=0.0, format="%.2f", value=st.session_state.form_data["pe4"])
 
-        ps1 = st.number_input("P/S år -4", min_value=0.0, format="%.2f")
-        ps2 = st.number_input("P/S år -3", min_value=0.0, format="%.2f")
-        ps3 = st.number_input("P/S år -2", min_value=0.0, format="%.2f")
-        ps4 = st.number_input("P/S år -1", min_value=0.0, format="%.2f")
+        ps1 = st.number_input("P/S år -4", min_value=0.0, format="%.2f", value=st.session_state.form_data["ps1"])
+        ps2 = st.number_input("P/S år -3", min_value=0.0, format="%.2f", value=st.session_state.form_data["ps2"])
+        ps3 = st.number_input("P/S år -2", min_value=0.0, format="%.2f", value=st.session_state.form_data["ps3"])
+        ps4 = st.number_input("P/S år -1", min_value=0.0, format="%.2f", value=st.session_state.form_data["ps4"])
 
-        vinst_ar = st.number_input("Vinst prognos i år", format="%.2f")
-        vinst_nasta_ar = st.number_input("Vinst prognos nästa år", format="%.2f")
+        vinst_ar = st.number_input("Vinst prognos i år", format="%.2f", value=st.session_state.form_data["vinst_ar"])
+        vinst_nasta_ar = st.number_input("Vinst prognos nästa år", format="%.2f", value=st.session_state.form_data["vinst_nasta_ar"])
 
-        oms_i_ar = st.number_input("Omsättningstillväxt i år", format="%.2f")
-        oms_nasta_ar = st.number_input("Omsättningstillväxt nästa år", format="%.2f")
+        oms_i_ar = st.number_input("Omsättningstillväxt i år", format="%.2f", value=st.session_state.form_data["oms_i_ar"])
+        oms_nasta_ar = st.number_input("Omsättningstillväxt nästa år", format="%.2f", value=st.session_state.form_data["oms_nasta_ar"])
 
         submitted = st.form_submit_button("Spara bolag")
 
         if submitted:
-            if bolag == "":
+            if bolag.strip() == "":
                 st.error("Du måste ange bolagsnamn!")
             else:
                 data = (
-                    bolag,
+                    bolag.strip(),
                     nuvarande_kurs,
                     pe1, pe2, pe3, pe4,
                     ps1, ps2, ps3, ps4,
@@ -128,7 +137,24 @@ def main():
                 )
                 add_or_update_bolag(data)
                 st.success(f"Bolaget '{bolag}' sparat/uppdaterat!")
-                st.experimental_rerun()
+
+                # Spara i session state
+                st.session_state.form_data = {
+                    "bolag": "",
+                    "nuvarande_kurs": 0.0,
+                    "pe1": 0.0,
+                    "pe2": 0.0,
+                    "pe3": 0.0,
+                    "pe4": 0.0,
+                    "ps1": 0.0,
+                    "ps2": 0.0,
+                    "ps3": 0.0,
+                    "ps4": 0.0,
+                    "vinst_ar": 0.0,
+                    "vinst_nasta_ar": 0.0,
+                    "oms_i_ar": 0.0,
+                    "oms_nasta_ar": 0.0
+                }
 
     # --- Visa bolag ---
     st.markdown("---")
@@ -178,22 +204,4 @@ def main():
 
         if filter_undervarderade:
             bolag_data = [b for b in bolag_data if b["Undervärdering %"] is not None and b["Undervärdering %"] >= 30]
-            bolag_data = sorted(bolag_data, key=lambda x: x["Undervärdering %"], reverse=True)
-
-        df = pd.DataFrame(bolag_data)
-        if not df.empty:
-            df_display = df.copy()
-            df_display["Nuvarande kurs"] = df_display["Nuvarande kurs"].map("{:.2f}".format)
-            df_display["Target P/E i år"] = df_display["Target P/E i år"].map(lambda x: f"{x:.2f}" if x else "-")
-            df_display["Target P/E nästa år"] = df_display["Target P/E nästa år"].map(lambda x: f"{x:.2f}" if x else "-")
-            df_display["Target P/S i år"] = df_display["Target P/S i år"].map(lambda x: f"{x:.2f}" if x else "-")
-            df_display["Target P/S nästa år"] = df_display["Target P/S nästa år"].map(lambda x: f"{x:.2f}" if x else "-")
-            df_display["Genomsnittlig targetkurs"] = df_display["Genomsnittlig targetkurs"].map(lambda x: f"{x:.2f}" if x else "-")
-            df_display["Undervärdering %"] = df_display["Undervärdering %"].map(lambda x: f"{x:.1f}%" if x else "-")
-
-            st.dataframe(df_display)
-        else:
-            st.info("Inga bolag matchar filtreringen.")
-
-if __name__ == "__main__":
-    main()
+            bolag_data =

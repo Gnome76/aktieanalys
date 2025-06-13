@@ -84,6 +84,14 @@ def to_excel(df):
     processed_data = output.getvalue()
     return processed_data
 
+# --- Hjälpfunktion för säker float-konvertering ---
+
+def safe_float(val):
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
+
 # --- Streamlit UI ---
 
 st.set_page_config(page_title="Aktieanalys med DB", page_icon="📈", layout="centered")
@@ -128,21 +136,21 @@ if not df.empty:
         with st.form("edit_form"):
             bolag_id = bolag_data['id']
             bolag = st.text_input("Bolagsnamn", value=bolag_data['bolag'], key="edit_bolag")
-            kurs = st.number_input("Nuvarande kurs", min_value=0.0, value=float(bolag_data['nuvarande_kurs']), key="edit_kurs")
+            kurs = st.number_input("Nuvarande kurs", min_value=0.0, value=safe_float(bolag_data['nuvarande_kurs']), key="edit_kurs")
 
             pe = [
-                st.number_input(f"P/E {i+1}", min_value=0.0, value=float(bolag_data[f'pe{i+1}']), key=f"edit_pe{i}_input")
+                st.number_input(f"P/E {i+1}", min_value=0.0, value=safe_float(bolag_data[f'pe{i+1}']), key=f"edit_pe{i}_input")
                 for i in range(4)
             ]
             ps = [
-                st.number_input(f"P/S {i+1}", min_value=0.0, value=float(bolag_data[f'ps{i+1}']), key=f"edit_ps{i}_input")
+                st.number_input(f"P/S {i+1}", min_value=0.0, value=safe_float(bolag_data[f'ps{i+1}']), key=f"edit_ps{i}_input")
                 for i in range(4)
             ]
 
-            vinst_i_ar = st.number_input("Vinstprognos i år", min_value=0.0, value=float(bolag_data['vinst_ar']), key="edit_vinst_ar")
-            vinst_nasta_ar = st.number_input("Vinstprognos nästa år", min_value=0.0, value=float(bolag_data['vinst_nasta_ar']), key="edit_vinst_nasta_ar")
-            oms_i_ar = st.number_input("Omsättningstillväxt i år", min_value=0.0, value=float(bolag_data['oms_i_ar']), key="edit_oms_i_ar")
-            oms_nasta_ar = st.number_input("Omsättningstillväxt nästa år", min_value=0.0, value=float(bolag_data['oms_nasta_ar']), key="edit_oms_nasta_ar")
+            vinst_i_ar = st.number_input("Vinstprognos i år", min_value=0.0, value=safe_float(bolag_data['vinst_ar']), key="edit_vinst_ar")
+            vinst_nasta_ar = st.number_input("Vinstprognos nästa år", min_value=0.0, value=safe_float(bolag_data['vinst_nasta_ar']), key="edit_vinst_nasta_ar")
+            oms_i_ar = st.number_input("Omsättningstillväxt i år", min_value=0.0, value=safe_float(bolag_data['oms_i_ar']), key="edit_oms_i_ar")
+            oms_nasta_ar = st.number_input("Omsättningstillväxt nästa år", min_value=0.0, value=safe_float(bolag_data['oms_nasta_ar']), key="edit_oms_nasta_ar")
 
             uppdatera = st.form_submit_button("💾 Uppdatera bolag")
             if uppdatera:
@@ -173,33 +181,4 @@ if not df.empty:
 
         st.markdown(f"""
         <div style="border:1px solid #ccc; border-radius:8px; padding:12px; margin-bottom:10px;">
-        <h3 style="margin-bottom:5px;">{row['bolag']} {färg}</h3>
-        <p><b>Nuvarande kurs:</b> {row['nuvarande_kurs']:.2f} kr</p>
-        <p>🧮 <b>Target baserat på P/E:</b> {row['Target P/E']:.2f} kr</p>
-        <p>🧮 <b>Target baserat på P/S:</b> {row['Target P/S']:.2f} kr</p>
-        <p>🟨 <b>Genomsnittlig targetkurs (P/E + P/S / 2):</b> <strong>{row['Target genomsnitt']:.2f} kr</strong></p>
-        <p>📉 <b>Undervärdering:</b> {undervärdering:.1f} %</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if st.button(f"🗑️ Ta bort {row['bolag']}", key=f"del_{row['bolag']}"):
-            radera_bolag(row['bolag'])
-            st.experimental_rerun()
-
-    undervarderade = df_calc[df_calc['Undervärdering %'] >= 30].sort_values('Undervärdering %', ascending=False)
-    if not undervarderade.empty:
-        st.subheader("🟢 Mest undervärderade bolag (≥ 30%)")
-        for _, row in undervarderade.iterrows():
-            st.markdown(f"**{row['bolag']}** – {row['Undervärdering %']:.1f}% undervärderad, mål: {row['Target genomsnitt']:.2f} kr")
-    else:
-        st.info("Inga bolag är just nu undervärderade med ≥ 30%.")
-
-    st.subheader("📤 Exportera data")
-    export_format = st.selectbox("Välj exportformat", options=["Excel (.xlsx)", "CSV (.csv)"])
-    if st.button("Exportera"):
-        if export_format == "Excel (.xlsx)":
-            data = to_excel(df_calc)
-            st.download_button(label="Ladda ner Excel-fil", data=data, file_name="aktieanalys.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        else:
-            csv = df_calc.to_csv(index=False).encode('utf-8')
-            st.download_button(label="Ladda ner CSV-fil", data=csv, file_name="aktieanalys.csv", mime="text/csv")
+        <h3 style="margin-bottom:5px;">{row['bol

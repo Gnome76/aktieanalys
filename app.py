@@ -102,7 +102,7 @@ def main():
                 )
                 add_or_update_bolag(data)
                 st.success(f"✅ '{bolag_input}' har sparats eller uppdaterats!")
-                st.experimental_rerun()
+                st.session_state.clear()  # 👈 Bytt från rerun till clear
 
     st.subheader("📈 Analyserade bolag")
 

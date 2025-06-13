@@ -8,7 +8,6 @@ from io import BytesIO
 conn = sqlite3.connect("aktier.db", check_same_thread=False)
 c = conn.cursor()
 
-# Skapa tabell om den inte finns
 c.execute('''
 CREATE TABLE IF NOT EXISTS bolag (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,11 +57,13 @@ def uppdatera_bolag(bolag_id, bolag, kurs, pe, ps, vinst_ar, vinst_nasta_ar, oms
     ''', (bolag, kurs, *pe, *ps, vinst_ar, vinst_nasta_ar, oms_i_ar, oms_nasta_ar, bolag_id))
     conn.commit()
 
-def radera_bolag(bolag):
-    c.execute("DELETE FROM bolag WHERE bolag = ?", (bolag,))
-    conn.commit()
+def safe_float(val):
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
 
-def beräkna_target(df):
+def berakna_target(df):
     df = df.copy()
     df['PE snitt'] = df[['pe1', 'pe2', 'pe3', 'pe4']].mean(axis=1)
     df['PS snitt'] = df[['ps1', 'ps2', 'ps3', 'ps4']].mean(axis=1)
@@ -74,47 +75,33 @@ def beräkna_target(df):
     df['Target genomsnitt'] = (df['Target P/E'] + df['Target P/S']) / 2
 
     df['Undervärdering %'] = ((df['Target genomsnitt'] - df['nuvarande_kurs']) / df['nuvarande_kurs']) * 100
+
     return df
-
-def to_excel(df):
-    output = BytesIO()
-    writer = pd.ExcelWriter(output, engine='xlsxwriter')
-    df.to_excel(writer, index=False, sheet_name='Bolag')
-    writer.save()
-    processed_data = output.getvalue()
-    return processed_data
-
-# --- Hjälpfunktion för säker float-konvertering ---
-
-def safe_float(val):
-    try:
-        return float(val)
-    except (TypeError, ValueError):
-        return 0.0
 
 # --- Streamlit UI ---
 
 st.set_page_config(page_title="Aktieanalys med DB", page_icon="📈", layout="centered")
 st.title("📈 Aktieanalys med Databas")
 
-# --- Lägg till nytt bolag ---
+# Lägg till nytt bolag
 with st.expander("➕ Lägg till nytt bolag"):
-    with st.form("add_company_form", clear_on_submit=True):
-        bolag = st.text_input("Bolagsnamn", key="bolag_input")
-        kurs = st.number_input("Nuvarande kurs", min_value=0.0, key="kurs_input")
+    with st.form("add_form", clear_on_submit=True):
+        bolag = st.text_input("Bolagsnamn")
+        kurs = st.number_input("Nuvarande kurs", min_value=0.0)
 
-        pe = [st.number_input(f"P/E {i+1}", min_value=0.0, key=f"pe{i}_input") for i in range(4)]
-        ps = [st.number_input(f"P/S {i+1}", min_value=0.0, key=f"ps{i}_input") for i in range(4)]
+        pe = [st.number_input(f"P/E {i+1}", min_value=0.0) for i in range(4)]
+        ps = [st.number_input(f"P/S {i+1}", min_value=0.0) for i in range(4)]
 
-        vinst_i_ar = st.number_input("Vinstprognos i år", min_value=0.0, key="vinst_ar_input")
-        vinst_nasta_ar = st.number_input("Vinstprognos nästa år", min_value=0.0, key="vinst_nasta_ar_input")
-        oms_i_ar = st.number_input("Omsättningstillväxt i år", min_value=0.0, key="oms_i_ar_input")
-        oms_nasta_ar = st.number_input("Omsättningstillväxt nästa år", min_value=0.0, key="oms_nasta_ar_input")
+        vinst_i_ar = st.number_input("Vinstprognos i år", min_value=0.0)
+        vinst_nasta_ar = st.number_input("Vinstprognos nästa år", min_value=0.0)
+        oms_i_ar = st.number_input("Omsättningstillväxt i år", min_value=0.0)
+        oms_nasta_ar = st.number_input("Omsättningstillväxt nästa år", min_value=0.0)
 
-        submitted = st.form_submit_button("💾 Spara bolag")
-        if submitted:
+        submit = st.form_submit_button("💾 Spara bolag")
+
+        if submit:
             if bolag.strip() == "":
-                st.warning("Skriv in ett bolagsnamn!")
+                st.warning("Ange ett bolagsnamn!")
             else:
                 ok, msg = lagg_till_bolag(bolag.strip().capitalize(), kurs, pe, ps, vinst_i_ar, vinst_nasta_ar, oms_i_ar, oms_nasta_ar)
                 if ok:
@@ -122,13 +109,14 @@ with st.expander("➕ Lägg till nytt bolag"):
                 else:
                     st.error(msg)
 
-# --- Hämta och visa data ---
+# Hämta data
 df = hamta_data()
 
-# --- Redigera bolag ---
+# Redigera bolag
 st.subheader("✏️ Redigera sparade bolag")
+
 if not df.empty:
-    val = st.selectbox("Välj bolag att redigera", options=df['bolag'].tolist())
+    val = st.selectbox("Välj bolag att redigera", df['bolag'].tolist())
 
     if val:
         bolag_data = df[df['bolag'] == val].iloc[0]
@@ -153,6 +141,7 @@ if not df.empty:
             oms_nasta_ar = st.number_input("Omsättningstillväxt nästa år", min_value=0.0, value=safe_float(bolag_data['oms_nasta_ar']), key="edit_oms_nasta_ar")
 
             uppdatera = st.form_submit_button("💾 Uppdatera bolag")
+
             if uppdatera:
                 uppdatera_bolag(bolag_id, bolag.strip().capitalize(), kurs, pe, ps, vinst_i_ar, vinst_nasta_ar, oms_i_ar, oms_nasta_ar)
                 st.success(f"✅ {bolag} uppdaterat!")
@@ -160,25 +149,47 @@ if not df.empty:
 else:
     st.info("Inga bolag att visa/redigera ännu.")
 
-# --- Visa alla bolag med värdering ---
+# Visa alla bolag med beräkningar och filter
 
 if not df.empty:
-    df_calc = beräkna_target(df)
+    df_calc = berakna_target(df)
 
-    sök = st.text_input("🔍 Filtrera bolag (sök på namn)", key="sök_filter").lower()
+    sök = st.text_input("🔍 Filtrera bolag (sök på namn)").lower()
     if sök:
         df_calc = df_calc[df_calc['bolag'].str.lower().str.contains(sök)]
 
-    st.subheader("📋 Bolag och värdering")
-    for _, row in df_calc.iterrows():
-        undervärdering = row['Undervärdering %']
-        if undervärdering >= 30:
-            färg = "🟢"
-        elif undervärdering > 0:
-            färg = "⚪️"
-        else:
-            färg = "🔴"
+    # Filtrera undervärderade minst 30%
+    undervärderade = df_calc[df_calc['Undervärdering %'] >= 30].sort_values(by='Undervärdering %', ascending=False)
 
+    st.subheader("📋 Bolag och värdering")
+
+    if not undervärderade.empty:
+        st.markdown("### Undervärderade bolag (minst 30%)")
+        for _, row in undervärderade.iterrows():
+            st.markdown(f"""
+            <div style="border:1px solid #aaa; border-radius:10px; padding:10px; margin-bottom:10px;">
+            <b>{row['bolag']}</b><br>
+            Nuvarande kurs: {row['nuvarande_kurs']:.2f} SEK<br>
+            Target kurs P/E: {row['Target P/E']:.2f} SEK<br>
+            Target kurs P/S: {row['Target P/S']:.2f} SEK<br>
+            <b>Target kurs genomsnitt: {row['Target genomsnitt']:.2f} SEK</b><br>
+            Undervärdering: {row['Undervärdering %']:.2f} %
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("Inga bolag är undervärderade med minst 30%.")
+
+    st.markdown("---")
+    st.markdown("### Alla bolag:")
+
+    for _, row in df_calc.iterrows():
         st.markdown(f"""
-        <div style="border:1px solid #ccc; border-radius:8px; padding:12px; margin-bottom:10px;">
-        <h3 style="margin-bottom:5px;">{row['bol
+        <div style="border:1px solid #ddd; border-radius:8px; padding:8px; margin-bottom:8px;">
+        <b>{row['bolag']}</b> - Kurs: {row['nuvarande_kurs']:.2f} SEK - 
+        Target P/E: {row['Target P/E']:.2f} SEK, Target P/S: {row['Target P/S']:.2f} SEK, 
+        Genomsnitt Target: {row['Target genomsnitt']:.2f} SEK, 
+        Undervärdering: {row['Undervärdering %']:.2f} %
+        </div>
+        """, unsafe_allow_html=True)
+else:
+    st.info("Inga bolag att visa.")

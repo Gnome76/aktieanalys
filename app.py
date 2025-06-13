@@ -22,6 +22,11 @@ def skapa_tabell():
 
 skapa_tabell()
 
+# --- Rensa hela tabellen (vid knapptryck) ---
+def rensa_tabell():
+    c.execute("DELETE FROM bolag")
+    conn.commit()
+
 # --- Hämta alla bolag ---
 def hamta_bolag():
     return pd.read_sql("SELECT * FROM bolag ORDER BY bolag", conn)
@@ -131,3 +136,9 @@ else:
 
     if visa_alla or underv_filter:
         st.dataframe(result_df, use_container_width=True)
+
+# --- Rensa databasen ---
+st.markdown("---")
+if st.button("🗑 Rensa hela databasen"):
+    rensa_tabell()
+    st.success("Alla bolag har raderats.")

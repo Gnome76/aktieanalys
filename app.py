@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
 
-st.title("📊 Aktieanalys – Enkel värderingsmodell")
+st.set_page_config(page_title="Aktieanalys", page_icon="📈", layout="centered")
+
+st.title("📈 Aktieanalys – Nyckeltal & Värdering")
 
 # Lagra data i session state
 if 'data' not in st.session_state:
@@ -13,29 +15,29 @@ if 'data' not in st.session_state:
     ])
 
 # Formulär för att lägga till bolag
-with st.form("add_company"):
-    st.subheader("➕ Lägg till nytt bolag")
-    bolag = st.text_input("Bolagsnamn")
-    kurs = st.number_input("Nuvarande kurs", min_value=0.0)
+with st.expander("➕ Lägg till nytt bolag"):
+    with st.form("add_company"):
+        bolag = st.text_input("Bolagsnamn")
+        kurs = st.number_input("Nuvarande kurs", min_value=0.0)
 
-    pe = [st.number_input(f"P/E {i+1}", min_value=0.0, key=f"pe{i}") for i in range(4)]
-    ps = [st.number_input(f"P/S {i+1}", min_value=0.0, key=f"ps{i}") for i in range(4)]
+        pe = [st.number_input(f"P/E {i+1}", min_value=0.0, key=f"pe{i}") for i in range(4)]
+        ps = [st.number_input(f"P/S {i+1}", min_value=0.0, key=f"ps{i}") for i in range(4)]
 
-    vinst_i_ar = st.number_input("Vinstprognos i år", min_value=0.0)
-    vinst_nasta_ar = st.number_input("Vinstprognos nästa år", min_value=0.0)
-    oms_i_ar = st.number_input("Omsättningstillväxt i år", min_value=0.0)
-    oms_nasta_ar = st.number_input("Omsättningstillväxt nästa år", min_value=0.0)
+        vinst_i_ar = st.number_input("Vinstprognos i år", min_value=0.0)
+        vinst_nasta_ar = st.number_input("Vinstprognos nästa år", min_value=0.0)
+        oms_i_ar = st.number_input("Omsättningstillväxt i år", min_value=0.0)
+        oms_nasta_ar = st.number_input("Omsättningstillväxt nästa år", min_value=0.0)
 
-    submitted = st.form_submit_button("Spara bolag")
-    if submitted and bolag:
-        ny_rad = pd.DataFrame([[
-            bolag.strip().capitalize(), kurs, *pe, *ps,
-            vinst_i_ar, vinst_nasta_ar, oms_i_ar, oms_nasta_ar
-        ]], columns=st.session_state.data.columns)
+        submitted = st.form_submit_button("💾 Spara bolag")
+        if submitted and bolag:
+            ny_rad = pd.DataFrame([[
+                bolag.strip().capitalize(), kurs, *pe, *ps,
+                vinst_i_ar, vinst_nasta_ar, oms_i_ar, oms_nasta_ar
+            ]], columns=st.session_state.data.columns)
 
-        st.session_state.data = pd.concat([st.session_state.data, ny_rad])
-        st.session_state.data = st.session_state.data.sort_values("Bolag").reset_index(drop=True)
-        st.success(f"{bolag} har lagts till!")
+            st.session_state.data = pd.concat([st.session_state.data, ny_rad])
+            st.session_state.data = st.session_state.data.sort_values("Bolag").reset_index(drop=True)
+            st.success(f"✅ {bolag} har lagts till!")
 
 # Beräkna targetkurser
 def beräkna_target(df):
@@ -52,15 +54,31 @@ def beräkna_target(df):
     df['Undervärdering %'] = ((df['Target genomsnitt'] - df['Nuvarande kurs']) / df['Nuvarande kurs']) * 100
     return df
 
-# Visa bolag med beräkningar
+# Visa bolag
 if not st.session_state.data.empty:
     df = beräkna_target(st.session_state.data)
 
-    st.subheader("📈 Översikt – Alla bolag")
-    st.dataframe(df[['Bolag', 'Nuvarande kurs', 'Target P/E', 'Target P/S', 'Target genomsnitt', 'Undervärdering %']])
+    st.subheader("📋 Alla bolag")
+    for index, row in df.iterrows():
+        färg = "🟢" if row["Undervärdering %"] >= 30 else "⚪️" if row["Undervärdering %"] > 0 else "🔴"
+        st.markdown(f"""
+        ### {row['Bolag']} {färg}
+        - **Nuvarande kurs:** {row['Nuvarande kurs']:.2f} kr
+        - **Target P/E-kurs:** {row['Target P/E']:.2f} kr
+        - **Target P/S-kurs:** {row['Target P/S']:.2f} kr
+        - **Snitt-target:** {row['Target genomsnitt']:.2f} kr
+        - **Undervärdering:** {row['Undervärdering %']:.1f} %
+        """, unsafe_allow_html=True)
 
-    st.subheader("🟢 Undervärderade bolag (≥ 30%)")
+    # Lista undervärderade bolag
     undervarderade = df[df['Undervärdering %'] >= 30].sort_values('Undervärdering %', ascending=False)
-    st.dataframe(undervarderade[['Bolag', 'Nuvarande kurs', 'Target genomsnitt', 'Undervärdering %']])
+
+    if not undervarderade.empty:
+        st.subheader("🟢 Mest undervärderade bolag (≥ 30%)")
+        for _, row in undervarderade.iterrows():
+            st.markdown(f"**{row['Bolag']}** – {row['Undervärdering %']:.1f}% undervärderad, mål: {row['Target genomsnitt']:.2f} kr")
+    else:
+        st.info("Inga bolag är just nu undervärderade med ≥ 30%.")
+
 else:
     st.info("Inga bolag tillagda ännu.")

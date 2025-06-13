@@ -123,7 +123,7 @@ with st.form("add_form", clear_on_submit=True):
                 st.error("Bolaget finns redan!")
 
 # Visa sparade bolag
-st.header("📊 Sparade bolag och värdering")
+st.header("📊 Undervärderade bolag med minst 30% undervärdering")
 
 df = hamta_allt()
 
@@ -138,28 +138,86 @@ else:
         target = berakna_targetkurs(row['nuvarande_kurs'], pe_list, ps_list, row['vinst_ar'], row['vinst_nasta_ar'])
         undervardering_avg = berakna_undervardering(row['nuvarande_kurs'], target['target_avg_i_ar'])
 
-        resultat.append({
-            'Bolag': row['bolag'],
-            'Nuvarande kurs': row['nuvarande_kurs'],
-            'Target P/E i år': target['target_pe_i_ar'],
-            'Target P/S i år': target['target_ps_i_ar'],
-            'Target Genomsnitt i år': target['target_avg_i_ar'],
-            'Undervärdering (%)': undervardering_avg,
-        })
+        if undervardering_avg >= 30:
+            resultat.append({
+                'Bolag': row['bolag'],
+                'Nuvarande kurs': row['nuvarande_kurs'],
+                'Target P/E i år': target['target_pe_i_ar'],
+                'Target P/S i år': target['target_ps_i_ar'],
+                'Target Genomsnitt i år': target['target_avg_i_ar'],
+                'Undervärdering (%)': undervardering_avg,
+            })
 
-    df_result = pd.DataFrame(resultat)
+    if not resultat:
+        st.info("Inga bolag är undervärderade med minst 30%.")
+    else:
+        # Sortera efter undervärdering största först
+        resultat = sorted(resultat, key=lambda x: x['Undervärdering (%)'], reverse=True)
 
-    filter_undervarderade = st.checkbox("Visa endast bolag med minst 30% undervärdering", value=False)
+        # Bygg tabell i markdown med lite färg för undervärdering
+        st.markdown(
+            """
+            <style>
+                .table-container {
+                    max-width: 900px;
+                    overflow-x: auto;
+                }
+                table {
+                    border-collapse: collapse;
+                    width: 100%;
+                    font-family: Arial, sans-serif;
+                }
+                th, td {
+                    border: 1px solid #ddd;
+                    padding: 8px;
+                    text-align: center;
+                }
+                th {
+                    background-color: #004080;
+                    color: white;
+                }
+                tr:nth-child(even){background-color: #f2f2f2;}
+                tr:hover {background-color: #ddd;}
+                .green {
+                    background-color: #d4edda;
+                    color: #155724;
+                    font-weight: bold;
+                }
+            </style>
+            """, unsafe_allow_html=True
+        )
 
-    if filter_undervarderade:
-        df_result = df_result[df_result['Undervärdering (%)'] >= 30]
+        rows_md = ""
+        for bolag in resultat:
+            underv = bolag['Undervärdering (%)']
+            underv_class = "green" if underv >= 30 else ""
+            rows_md += f"""
+            <tr class="{underv_class}">
+                <td>{bolag['Bolag']}</td>
+                <td>{bolag['Nuvarande kurs']:.2f}</td>
+                <td>{bolag['Target P/E i år']:.2f}</td>
+                <td>{bolag['Target P/S i år']:.2f}</td>
+                <td>{bolag['Target Genomsnitt i år']:.2f}</td>
+                <td>{underv:.2f} %</td>
+            </tr>
+            """
 
-    df_result = df_result.sort_values(by='Undervärdering (%)', ascending=False)
-
-    st.dataframe(df_result.style.format({
-        'Nuvarande kurs': "{:.2f}",
-        'Target P/E i år': "{:.2f}",
-        'Target P/S i år': "{:.2f}",
-        'Target Genomsnitt i år': "{:.2f}",
-        'Undervärdering (%)': "{:.2f} %"
-    }), height=400)
+        st.markdown(f"""
+        <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Bolag</th>
+                    <th>Nuvarande kurs</th>
+                    <th>Target P/E i år</th>
+                    <th>Target P/S i år</th>
+                    <th>Target Genomsnitt i år</th>
+                    <th>Undervärdering (%)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_md}
+            </tbody>
+        </table>
+        </div>
+        """, unsafe_allow_html=True)

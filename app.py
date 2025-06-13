@@ -166,27 +166,34 @@ def main():
                 undervardering_pct = (target_genomsnitt - kurs) / kurs * 100
 
             bolag_data.append({
-                "bolag": bolag,
-                "kurs": kurs,
-                "target_pe_ar": target_pe_ar,
-                "target_pe_nasta_ar": target_pe_nasta_ar,
-                "target_ps_ar": target_ps_ar,
-                "target_ps_nasta_ar": target_ps_nasta_ar,
-                "target_genomsnitt": target_genomsnitt,
-                "undervardering_pct": undervardering_pct
+                "Bolag": bolag,
+                "Nuvarande kurs": kurs,
+                "Target P/E i år": target_pe_ar,
+                "Target P/E nästa år": target_pe_nasta_ar,
+                "Target P/S i år": target_ps_ar,
+                "Target P/S nästa år": target_ps_nasta_ar,
+                "Genomsnittlig targetkurs": target_genomsnitt,
+                "Undervärdering %": undervardering_pct
             })
 
         if filter_undervarderade:
-            bolag_data = [b for b in bolag_data if b["undervardering_pct"] is not None and b["undervardering_pct"] >= 30]
-            bolag_data = sorted(bolag_data, key=lambda x: x["undervardering_pct"], reverse=True)
+            bolag_data = [b for b in bolag_data if b["Undervärdering %"] is not None and b["Undervärdering %"] >= 30]
+            bolag_data = sorted(bolag_data, key=lambda x: x["Undervärdering %"], reverse=True)
 
         df = pd.DataFrame(bolag_data)
         if not df.empty:
             df_display = df.copy()
-            df_display["kurs"] = df_display["kurs"].map("{:.2f}".format)
-            df_display["target_pe_ar"] = df_display["target_pe_ar"].map(lambda x: f"{x:.2f}" if x else "-")
-            df_display["target_pe_nasta_ar"] = df_display["target_pe_nasta_ar"].map(lambda x: f"{x:.2f}" if x else "-")
-            df_display["target_ps_ar"] = df_display["target_ps_ar"].map(lambda x: f"{x:.2f}" if x else "-")
-            df_display["target_ps_nasta_ar"] = df_display["target_ps_nasta_ar"].map(lambda x: f"{x:.2f}" if x else "-")
-            df_display["target_genomsnitt"] = df_display["target_genomsnitt"].map(lambda x: f"{x:.2f}" if x else "-")
-            df_display["undervardering_pct"] = df_display["undervardering_pct"].map(lambda x: f"{x:.1f}%" if
+            df_display["Nuvarande kurs"] = df_display["Nuvarande kurs"].map("{:.2f}".format)
+            df_display["Target P/E i år"] = df_display["Target P/E i år"].map(lambda x: f"{x:.2f}" if x else "-")
+            df_display["Target P/E nästa år"] = df_display["Target P/E nästa år"].map(lambda x: f"{x:.2f}" if x else "-")
+            df_display["Target P/S i år"] = df_display["Target P/S i år"].map(lambda x: f"{x:.2f}" if x else "-")
+            df_display["Target P/S nästa år"] = df_display["Target P/S nästa år"].map(lambda x: f"{x:.2f}" if x else "-")
+            df_display["Genomsnittlig targetkurs"] = df_display["Genomsnittlig targetkurs"].map(lambda x: f"{x:.2f}" if x else "-")
+            df_display["Undervärdering %"] = df_display["Undervärdering %"].map(lambda x: f"{x:.1f}%" if x else "-")
+
+            st.dataframe(df_display)
+        else:
+            st.info("Inga bolag matchar filtreringen.")
+
+if __name__ == "__main__":
+    main()

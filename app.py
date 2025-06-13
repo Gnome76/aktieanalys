@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-st.title("📊 Aktieanalys – Enkel nyckeltalsapp")
+st.title("📊 Aktieanalys – Enkel värderingsmodell")
 
 # Lagra data i session state
 if 'data' not in st.session_state:
@@ -37,9 +37,30 @@ with st.form("add_company"):
         st.session_state.data = st.session_state.data.sort_values("Bolag").reset_index(drop=True)
         st.success(f"{bolag} har lagts till!")
 
-# Visa alla bolag
+# Beräkna targetkurser
+def beräkna_target(df):
+    df = df.copy()
+    df['PE snitt'] = df[['P/E1', 'P/E2', 'P/E3', 'P/E4']].mean(axis=1)
+    df['PS snitt'] = df[['P/S1', 'P/S2', 'P/S3', 'P/S4']].mean(axis=1)
+    df['Vinst snitt'] = df[['Vinst i år', 'Vinst nästa år']].mean(axis=1)
+    df['Oms snitt'] = df[['Omsättningstillväxt i år', 'Omsättningstillväxt nästa år']].mean(axis=1)
+
+    df['Target P/E'] = df['PE snitt'] * df['Vinst snitt']
+    df['Target P/S'] = df['PS snitt'] * df['Oms snitt']
+    df['Target genomsnitt'] = (df['Target P/E'] + df['Target P/S']) / 2
+
+    df['Undervärdering %'] = ((df['Target genomsnitt'] - df['Nuvarande kurs']) / df['Nuvarande kurs']) * 100
+    return df
+
+# Visa bolag med beräkningar
 if not st.session_state.data.empty:
-    st.subheader("📋 Sparade bolag")
-    st.dataframe(st.session_state.data)
+    df = beräkna_target(st.session_state.data)
+
+    st.subheader("📈 Översikt – Alla bolag")
+    st.dataframe(df[['Bolag', 'Nuvarande kurs', 'Target P/E', 'Target P/S', 'Target genomsnitt', 'Undervärdering %']])
+
+    st.subheader("🟢 Undervärderade bolag (≥ 30%)")
+    undervarderade = df[df['Undervärdering %'] >= 30].sort_values('Undervärdering %', ascending=False)
+    st.dataframe(undervarderade[['Bolag', 'Nuvarande kurs', 'Target genomsnitt', 'Undervärdering %']])
 else:
     st.info("Inga bolag tillagda ännu.")

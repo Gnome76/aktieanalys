@@ -2,23 +2,6 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 
-# --- Hjälpfunktioner ---
-def safe_float(val):
-    try:
-        if val is None:
-            return 0.0
-        return float(val)
-    except (TypeError, ValueError):
-        return 0.0
-
-def safe_str(val):
-    try:
-        if val is None:
-            return ""
-        return str(val).strip()
-    except Exception:
-        return ""
-
 # --- Databas ---
 conn = sqlite3.connect('aktier.db', check_same_thread=False)
 c = conn.cursor()
@@ -60,27 +43,16 @@ def berakna_genomsnitt(lista):
     rensad = [x for x in lista if x > 0]
     return sum(rensad) / len(rensad) if rensad else 0
 
-def berakna_targetkurs(kurs, pe_list, ps_list, vinst_ar, vinst_nasta_ar):
+def berakna_targetkurs(pe_list, ps_list, vinst_ar):
     pe_avg = berakna_genomsnitt(pe_list)
     ps_avg = berakna_genomsnitt(ps_list)
 
-    target_pe_i_ar = pe_avg * vinst_ar if pe_avg > 0 else 0
-    target_pe_nasta_ar = pe_avg * vinst_nasta_ar if pe_avg > 0 else 0
+    target_pe = pe_avg * vinst_ar if pe_avg > 0 else 0
+    target_ps = ps_avg * vinst_ar if ps_avg > 0 else 0
 
-    target_ps_i_ar = ps_avg * vinst_ar if ps_avg > 0 else 0
-    target_ps_nasta_ar = ps_avg * vinst_nasta_ar if ps_avg > 0 else 0
+    target_avg = (target_pe + target_ps) / 2 if target_pe > 0 and target_ps > 0 else max(target_pe, target_ps)
 
-    target_avg_i_ar = (target_pe_i_ar + target_ps_i_ar) / 2 if target_pe_i_ar > 0 and target_ps_i_ar > 0 else max(target_pe_i_ar, target_ps_i_ar)
-    target_avg_nasta_ar = (target_pe_nasta_ar + target_ps_nasta_ar) / 2 if target_pe_nasta_ar > 0 and target_ps_nasta_ar > 0 else max(target_pe_nasta_ar, target_ps_nasta_ar)
-
-    return {
-        'target_pe_i_ar': target_pe_i_ar,
-        'target_pe_nasta_ar': target_pe_nasta_ar,
-        'target_ps_i_ar': target_ps_i_ar,
-        'target_ps_nasta_ar': target_ps_nasta_ar,
-        'target_avg_i_ar': target_avg_i_ar,
-        'target_avg_nasta_ar': target_avg_nasta_ar
-    }
+    return target_pe, target_ps, target_avg
 
 def berakna_undervardering(nuvarande_kurs, target_kurs):
     if target_kurs == 0:
@@ -98,10 +70,10 @@ with st.form("add_form", clear_on_submit=True):
     bolag = st.text_input("Bolagsnamn")
     kurs = st.number_input("Nuvarande kurs", min_value=0.0, format="%.2f")
 
-    st.markdown("**P/E de 4 senaste:**")
+    st.markdown("**P/E de 4 senaste åren:**")
     pe = [st.number_input(f"P/E år {i+1}", min_value=0.0, format="%.2f", key=f"pe_add_{i}") for i in range(4)]
 
-    st.markdown("**P/S de 4 senaste:**")
+    st.markdown("**P/S de 4 senaste åren:**")
     ps = [st.number_input(f"P/S år {i+1}", min_value=0.0, format="%.2f", key=f"ps_add_{i}") for i in range(4)]
 
     vinst_i_ar = st.number_input("Vinstprognos i år", min_value=0.0, format="%.2f")
@@ -112,112 +84,53 @@ with st.form("add_form", clear_on_submit=True):
     submit = st.form_submit_button("💾 Lägg till bolag")
 
     if submit:
-        bolag_clean = safe_str(bolag).capitalize()
+        bolag_clean = bolag.strip().capitalize()
         if bolag_clean == "":
             st.warning("Ange ett bolagsnamn!")
         else:
             lyckades = lagg_till_bolag(bolag_clean, kurs, pe, ps, vinst_i_ar, vinst_nasta_ar, oms_i_ar, oms_nasta_ar)
             if lyckades:
-                st.success(f"✅ Bolag {bolag_clean} tillagt!")
+                st.success(f"✅ Bolag '{bolag_clean}' tillagt!")
             else:
                 st.error("Bolaget finns redan!")
 
-# Visa sparade bolag
-st.header("📊 Undervärderade bolag med minst 30% undervärdering")
+# Visa undervärderade bolag med minst 30% undervärdering
+st.header("📊 Bolag undervärderade med minst 30%")
 
 df = hamta_allt()
 
 if df.empty:
     st.info("Inga bolag sparade ännu.")
 else:
-    resultat = []
+    data_lista = []
     for i, row in df.iterrows():
         pe_list = [row['pe1'], row['pe2'], row['pe3'], row['pe4']]
         ps_list = [row['ps1'], row['ps2'], row['ps3'], row['ps4']]
 
-        target = berakna_targetkurs(row['nuvarande_kurs'], pe_list, ps_list, row['vinst_ar'], row['vinst_nasta_ar'])
-        undervardering_avg = berakna_undervardering(row['nuvarande_kurs'], target['target_avg_i_ar'])
+        target_pe_i_ar, target_ps_i_ar, target_avg_i_ar = berakna_targetkurs(pe_list, ps_list, row['vinst_ar'])
+        undervardering = berakna_undervardering(row['nuvarande_kurs'], target_avg_i_ar)
 
-        if undervardering_avg >= 30:
-            resultat.append({
+        if undervardering >= 30:
+            data_lista.append({
                 'Bolag': row['bolag'],
                 'Nuvarande kurs': row['nuvarande_kurs'],
-                'Target P/E i år': target['target_pe_i_ar'],
-                'Target P/S i år': target['target_ps_i_ar'],
-                'Target Genomsnitt i år': target['target_avg_i_ar'],
-                'Undervärdering (%)': undervardering_avg,
+                'Target P/E i år': target_pe_i_ar,
+                'Target P/S i år': target_ps_i_ar,
+                'Target Genomsnitt i år': target_avg_i_ar,
+                'Undervärdering (%)': undervardering
             })
 
-    if not resultat:
+    if not data_lista:
         st.info("Inga bolag är undervärderade med minst 30%.")
     else:
-        # Sortera efter undervärdering största först
-        resultat = sorted(resultat, key=lambda x: x['Undervärdering (%)'], reverse=True)
+        df_visning = pd.DataFrame(data_lista)
+        df_visning = df_visning.sort_values(by='Undervärdering (%)', ascending=False)
 
-        # Bygg tabell i markdown med lite färg för undervärdering
-        st.markdown(
-            """
-            <style>
-                .table-container {
-                    max-width: 900px;
-                    overflow-x: auto;
-                }
-                table {
-                    border-collapse: collapse;
-                    width: 100%;
-                    font-family: Arial, sans-serif;
-                }
-                th, td {
-                    border: 1px solid #ddd;
-                    padding: 8px;
-                    text-align: center;
-                }
-                th {
-                    background-color: #004080;
-                    color: white;
-                }
-                tr:nth-child(even){background-color: #f2f2f2;}
-                tr:hover {background-color: #ddd;}
-                .green {
-                    background-color: #d4edda;
-                    color: #155724;
-                    font-weight: bold;
-                }
-            </style>
-            """, unsafe_allow_html=True
-        )
+        # Formatera flyttal med 2 decimaler
+        df_visning['Nuvarande kurs'] = df_visning['Nuvarande kurs'].map('{:.2f}'.format)
+        df_visning['Target P/E i år'] = df_visning['Target P/E i år'].map('{:.2f}'.format)
+        df_visning['Target P/S i år'] = df_visning['Target P/S i år'].map('{:.2f}'.format)
+        df_visning['Target Genomsnitt i år'] = df_visning['Target Genomsnitt i år'].map('{:.2f}'.format)
+        df_visning['Undervärdering (%)'] = df_visning['Undervärdering (%)'].map('{:.2f} %'.format)
 
-        rows_md = ""
-        for bolag in resultat:
-            underv = bolag['Undervärdering (%)']
-            underv_class = "green" if underv >= 30 else ""
-            rows_md += f"""
-            <tr class="{underv_class}">
-                <td>{bolag['Bolag']}</td>
-                <td>{bolag['Nuvarande kurs']:.2f}</td>
-                <td>{bolag['Target P/E i år']:.2f}</td>
-                <td>{bolag['Target P/S i år']:.2f}</td>
-                <td>{bolag['Target Genomsnitt i år']:.2f}</td>
-                <td>{underv:.2f} %</td>
-            </tr>
-            """
-
-        st.markdown(f"""
-        <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th>Bolag</th>
-                    <th>Nuvarande kurs</th>
-                    <th>Target P/E i år</th>
-                    <th>Target P/S i år</th>
-                    <th>Target Genomsnitt i år</th>
-                    <th>Undervärdering (%)</th>
-                </tr>
-            </thead>
-            <tbody>
-                {rows_md}
-            </tbody>
-        </table>
-        </div>
-        """, unsafe_allow_html=True)
+        st.dataframe(df_visning, use_container_width=True)

@@ -22,15 +22,20 @@ def skapa_tabell():
 
 skapa_tabell()
 
-# --- Funktioner för att hämta och uppdatera data ---
+# --- Hämta alla bolag ---
 def hamta_bolag():
     return pd.read_sql("SELECT * FROM bolag ORDER BY bolag", conn)
 
+# --- Lägg till eller uppdatera bolag ---
 def lagg_till_eller_uppdatera_bolag(data):
-    c.execute('''
-        INSERT OR REPLACE INTO bolag VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', data)
-    conn.commit()
+    try:
+        c.execute('''
+            INSERT OR REPLACE INTO bolag VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', data)
+        conn.commit()
+        return True, None
+    except sqlite3.Error as e:
+        return False, str(e)
 
 # --- Beräkningar ---
 def genomsnitt(lista):
@@ -69,13 +74,17 @@ with st.form("aktieform", clear_on_submit=True):
 
     if st.form_submit_button("💾 Spara bolag"):
         if bolag:
-            lagg_till_eller_uppdatera_bolag((
+            data = (
                 bolag, kurs,
                 *pe, *ps,
                 vinst_ar, vinst_nasta_ar,
                 oms_i_ar, oms_nasta_ar
-            ))
-            st.success(f"{bolag} sparades!")
+            )
+            success, error = lagg_till_eller_uppdatera_bolag(data)
+            if success:
+                st.success(f"{bolag} sparades!")
+            else:
+                st.error(f"Fel i databasen: {error}")
         else:
             st.warning("Du måste ange ett bolagsnamn.")
 

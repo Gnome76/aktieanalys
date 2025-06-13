@@ -1,149 +1,248 @@
-import os
-
-# Radera databasen en gång för att fixa kolumnproblemet
-if os.path.exists("aktier.db"):
-    os.remove("aktier.db")
 import streamlit as st
 import sqlite3
-import pandas as pd
 
-# --- Databasanslutning ---
-conn = sqlite3.connect("aktier.db", check_same_thread=False)
-c = conn.cursor()
+# --- Databasfunktioner ---
 
-# --- Skapa tabell (radera och återskapa för att rätta struktur) ---
-def skapa_tabell():
-    c.execute("DROP TABLE IF EXISTS bolag")  # Bara första gången du kör detta
+DB_NAME = "aktier.db"
+
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
     c.execute('''
-        CREATE TABLE bolag (
-            bolag TEXT PRIMARY KEY,
-            nuvarande_kurs REAL,
-            pe1 REAL, pe2 REAL, pe3 REAL, pe4 REAL,
-            ps1 REAL, ps2 REAL, ps3 REAL, ps4 REAL,
-            vinst_ar REAL, vinst_nasta_ar REAL,
-            oms_i_ar REAL, oms_nasta_ar REAL
-        )
+    CREATE TABLE IF NOT EXISTS bolag (
+        bolag TEXT PRIMARY KEY,
+        nuvarande_kurs REAL,
+        pe1 REAL, pe2 REAL, pe3 REAL, pe4 REAL,
+        ps1 REAL, ps2 REAL, ps3 REAL, ps4 REAL,
+        vinst_ar REAL,
+        vinst_nasta_ar REAL,
+        oms_i_ar REAL,
+        oms_nasta_ar REAL
+    )
     ''')
     conn.commit()
+    conn.close()
 
-skapa_tabell()
-
-# --- Funktion för att rensa alla bolag (men inte databasen) ---
-def rensa_tabell():
-    c.execute("DELETE FROM bolag")
+def add_or_update_bolag(data):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('''
+    INSERT INTO bolag VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(bolag) DO UPDATE SET
+        nuvarande_kurs=excluded.nuvarande_kurs,
+        pe1=excluded.pe1,
+        pe2=excluded.pe2,
+        pe3=excluded.pe3,
+        pe4=excluded.pe4,
+        ps1=excluded.ps1,
+        ps2=excluded.ps2,
+        ps3=excluded.ps3,
+        ps4=excluded.ps4,
+        vinst_ar=excluded.vinst_ar,
+        vinst_nasta_ar=excluded.vinst_nasta_ar,
+        oms_i_ar=excluded.oms_i_ar,
+        oms_nasta_ar=excluded.oms_nasta_ar
+    ''', data)
     conn.commit()
+    conn.close()
 
-# --- Hämta bolag från databasen ---
-def hamta_bolag():
-    return pd.read_sql("SELECT * FROM bolag ORDER BY bolag", conn)
+def get_all_bolag():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('SELECT * FROM bolag ORDER BY bolag')
+    rows = c.fetchall()
+    conn.close()
+    return rows
 
-# --- Lägg till eller uppdatera bolag ---
-def lagg_till_eller_uppdatera_bolag(data):
-    try:
-        c.execute('''
-            INSERT OR REPLACE INTO bolag VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', data)
-        conn.commit()
-        return True, None
-    except sqlite3.Error as e:
-        return False, str(e)
+def delete_bolag(bolagsnamn):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('DELETE FROM bolag WHERE bolag=?', (bolagsnamn,))
+    conn.commit()
+    conn.close()
 
 # --- Beräkningar ---
-def genomsnitt(lista):
-    return sum(lista) / len(lista)
 
-def targetkurs_pe(pe_avg, vinst):
-    return pe_avg * vinst if vinst else 0
+def genomsnitt(values):
+    vals = [v for v in values if v is not None]
+    return sum(vals)/len(vals) if vals else None
 
-def targetkurs_ps(ps_avg, oms_tillv):
-    return ps_avg * (1 + oms_tillv / 100)
+def targetkurs_pe(pe_values, vinst):
+    pe_avg = genomsnitt(pe_values)
+    if pe_avg is None or vinst is None:
+        return None
+    return pe_avg * vinst
 
-def undervardering(target, current):
-    if current == 0:
-        return 0
-    return ((target - current) / current) * 100
+def targetkurs_ps(ps_values, oms):
+    ps_avg = genomsnitt(ps_values)
+    if ps_avg is None or oms is None:
+        return None
+    return ps_avg * oms
 
-# --- UI ---
-st.title("📈 Aktieanalys")
+# --- Streamlit UI ---
 
-with st.form("aktieform", clear_on_submit=True):
+st.title("Aktieanalys med databashantering")
+
+init_db()
+
+# --- Lägg till eller redigera bolag ---
+with st.form("form_lagg_till"):
     st.subheader("Lägg till eller uppdatera bolag")
 
-    bolag = st.text_input("Bolagsnamn").strip().capitalize()
-    kurs = st.number_input("Nuvarande kurs", min_value=0.0)
+    bolag = st.text_input("Bolagsnamn (unik identifierare)").strip()
+    nuvarande_kurs = st.number_input("Nuvarande kurs", min_value=0.0, format="%.2f")
+    
+    pe1 = st.number_input("P/E år -4", min_value=0.0, format="%.2f")
+    pe2 = st.number_input("P/E år -3", min_value=0.0, format="%.2f")
+    pe3 = st.number_input("P/E år -2", min_value=0.0, format="%.2f")
+    pe4 = st.number_input("P/E år -1", min_value=0.0, format="%.2f")
+    
+    ps1 = st.number_input("P/S år -4", min_value=0.0, format="%.2f")
+    ps2 = st.number_input("P/S år -3", min_value=0.0, format="%.2f")
+    ps3 = st.number_input("P/S år -2", min_value=0.0, format="%.2f")
+    ps4 = st.number_input("P/S år -1", min_value=0.0, format="%.2f")
 
-    st.markdown("**P/E 4 senaste år:**")
-    pe = [st.number_input(f"P/E år {i+1}", min_value=0.0, key=f"pe{i}") for i in range(4)]
+    vinst_ar = st.number_input("Vinst prognos i år", format="%.2f")
+    vinst_nasta_ar = st.number_input("Vinst prognos nästa år", format="%.2f")
 
-    st.markdown("**P/S 4 senaste år:**")
-    ps = [st.number_input(f"P/S år {i+1}", min_value=0.0, key=f"ps{i}") for i in range(4)]
+    oms_i_ar = st.number_input("Omsättningstillväxt i år", format="%.2f")
+    oms_nasta_ar = st.number_input("Omsättningstillväxt nästa år", format="%.2f")
 
-    vinst_ar = st.number_input("Vinst i år", min_value=0.0)
-    vinst_nasta_ar = st.number_input("Vinst nästa år", min_value=0.0)
-    oms_i_ar = st.number_input("Omsättningstillväxt i år (%)", min_value=0.0)
-    oms_nasta_ar = st.number_input("Omsättningstillväxt nästa år (%)", min_value=0.0)
+    submitted = st.form_submit_button("Spara bolag")
 
-    if st.form_submit_button("💾 Spara bolag"):
-        if bolag:
-            data = (
-                bolag, kurs,
-                *pe, *ps,
-                vinst_ar, vinst_nasta_ar,
-                oms_i_ar, oms_nasta_ar
-            )
-            success, error = lagg_till_eller_uppdatera_bolag(data)
-            if success:
-                st.success(f"{bolag} sparades.")
-            else:
-                st.error(f"Fel i databasen: {error}")
+    if submitted:
+        if bolag == "":
+            st.error("Du måste ange bolagsnamn!")
         else:
-            st.warning("Ange bolagsnamn.")
+            data = (
+                bolag,
+                nuvarande_kurs,
+                pe1, pe2, pe3, pe4,
+                ps1, ps2, ps3, ps4,
+                vinst_ar,
+                vinst_nasta_ar,
+                oms_i_ar,
+                oms_nasta_ar
+            )
+            add_or_update_bolag(data)
+            st.success(f"Bolaget '{bolag}' sparat/uppdaterat!")
+            st.experimental_rerun()
 
-# --- Visa bolag och analys ---
-st.subheader("📊 Analys av bolag")
-df = hamta_bolag()
+# --- Visa bolag ---
 
-if df.empty:
+st.markdown("---")
+st.subheader("Alla bolag i databasen")
+
+alla_bolag = get_all_bolag()
+
+if not alla_bolag:
     st.info("Inga bolag sparade ännu.")
 else:
-    resultat = []
+    # Filterknapp
+    filter_undervarderade = st.checkbox("Visa endast bolag undervärderade minst 30%")
 
-    for _, row in df.iterrows():
-        pe_avg = genomsnitt([row['pe1'], row['pe2'], row['pe3'], row['pe4']])
-        ps_avg = genomsnitt([row['ps1'], row['ps2'], row['ps3'], row['ps4']])
-        vinstsnitt = genomsnitt([row['vinst_ar'], row['vinst_nasta_ar']])
-        oms_snitt = genomsnitt([row['oms_i_ar'], row['oms_nasta_ar']])
+    # Beräkna targetkurser och undervärdering
+    bolag_data = []
+    for row in alla_bolag:
+        (
+            bolag, kurs, pe1, pe2, pe3, pe4,
+            ps1, ps2, ps3, ps4,
+            vinst_ar, vinst_nasta_ar,
+            oms_i_ar, oms_nasta_ar
+        ) = row
 
-        target_pe = targetkurs_pe(pe_avg, vinstsnitt)
-        target_ps = targetkurs_ps(ps_avg, oms_snitt)
-        target_avg = genomsnitt([target_pe, target_ps])
+        pe_vals = [pe1, pe2, pe3, pe4]
+        ps_vals = [ps1, ps2, ps3, ps4]
 
-        underv = undervardering(target_avg, row['nuvarande_kurs'])
+        # Targetkurser
+        target_pe_ar = targetkurs_pe(pe_vals, vinst_ar)
+        target_pe_nasta_ar = targetkurs_pe(pe_vals, vinst_nasta_ar)
+        target_ps_ar = targetkurs_ps(ps_vals, oms_i_ar)
+        target_ps_nasta_ar = targetkurs_ps(ps_vals, oms_nasta_ar)
 
-        resultat.append({
-            "Bolag": row['bolag'],
-            "Nuvarande kurs": row['nuvarande_kurs'],
-            "Target P/E": round(target_pe, 2),
-            "Target P/S": round(target_ps, 2),
-            "Target Snitt": round(target_avg, 2),
-            "Undervärdering (%)": round(underv, 2)
+        # Genomsnitt targetkurs (PE + PS)
+        targets = [t for t in [target_pe_ar, target_pe_nasta_ar, target_ps_ar, target_ps_nasta_ar] if t is not None]
+        target_genomsnitt = sum(targets)/len(targets) if targets else None
+
+        # Undervärdering % utifrån target_genomsnitt
+        if target_genomsnitt is not None:
+            undervardering_pct = (target_genomsnitt - kurs) / kurs * 100
+        else:
+            undervardering_pct = None
+
+        bolag_data.append({
+            "bolag": bolag,
+            "kurs": kurs,
+            "target_pe_ar": target_pe_ar,
+            "target_pe_nasta_ar": target_pe_nasta_ar,
+            "target_ps_ar": target_ps_ar,
+            "target_ps_nasta_ar": target_ps_nasta_ar,
+            "target_genomsnitt": target_genomsnitt,
+            "undervardering_pct": undervardering_pct
         })
 
-    result_df = pd.DataFrame(resultat)
+    # Filtrera undervärderade minst 30%
+    if filter_undervarderade:
+        bolag_data = [b for b in bolag_data if b["undervardering_pct"] is not None and b["undervardering_pct"] >= 30]
+        bolag_data = sorted(bolag_data, key=lambda x: x["undervardering_pct"], reverse=True)
 
-    st.markdown("### Filtrering:")
-    visa_alla = st.checkbox("Visa alla bolag", value=True)
-    visa_undervarderade = st.checkbox("Visa endast undervärderade (minst 30%)")
+    # Visa i tabell med snygg styling
+    import pandas as pd
+    df = pd.DataFrame(bolag_data)
+    if not df.empty:
+        # Format tal med två decimaler
+        df_display = df.copy()
+        df_display["kurs"] = df_display["kurs"].map("{:.2f}".format)
+        df_display["target_pe_ar"] = df_display["target_pe_ar"].map(lambda x: f"{x:.2f}" if x else "-")
+        df_display["target_pe_nasta_ar"] = df_display["target_pe_nasta_ar"].map(lambda x: f"{x:.2f}" if x else "-")
+        df_display["target_ps_ar"] = df_display["target_ps_ar"].map(lambda x: f"{x:.2f}" if x else "-")
+        df_display["target_ps_nasta_ar"] = df_display["target_ps_nasta_ar"].map(lambda x: f"{x:.2f}" if x else "-")
+        df_display["target_genomsnitt"] = df_display["target_genomsnitt"].map(lambda x: f"{x:.2f}" if x else "-")
+        df_display["undervardering_pct"] = df_display["undervardering_pct"].map(lambda x: f"{x:.1f}%" if x else "-")
 
-    if visa_undervarderade:
-        result_df = result_df[result_df["Undervärdering (%)"] >= 30]
-        result_df = result_df.sort_values(by="Undervärdering (%)", ascending=False)
+        st.dataframe(df_display, use_container_width=True)
+    else:
+        st.info("Inga bolag att visa med valt filter.")
 
-    if visa_alla or visa_undervarderade:
-        st.dataframe(result_df, use_container_width=True)
+# --- Redigera eller ta bort bolag ---
 
-# --- Töm alla bolag (frivillig funktion) ---
 st.markdown("---")
-if st.button("🗑 Rensa alla bolag i databasen"):
-    rensa_tabell()
-    st.success("Alla bolag raderades från databasen.")
+st.subheader("Redigera eller ta bort bolag")
+
+alla_bolag_namn = [b[0] for b in alla_bolag]
+
+val_bolag = st.selectbox("Välj bolag att redigera eller ta bort", options=alla_bolag_namn)
+
+if val_bolag:
+    # Hämta bolagets data
+    val_data = next(b for b in alla_bolag if b[0] == val_bolag)
+
+    with st.form("form_redigera"):
+        st.write(f"Redigera data för: **{val_bolag}**")
+
+        nuvarande_kurs_e = st.number_input("Nuvarande kurs", min_value=0.0, format="%.2f", value=val_data[1])
+        pe1_e = st.number_input("P/E år -4", min_value=0.0, format="%.2f", value=val_data[2])
+        pe2_e = st.number_input("P/E år -3", min_value=0.0, format="%.2f", value=val_data[3])
+        pe3_e = st.number_input("P/E år -2", min_value=0.0, format="%.2f", value=val_data[4])
+        pe4_e = st.number_input("P/E år -1", min_value=0.0, format="%.2f", value=val_data[5])
+
+        ps1_e = st.number_input("P/S år -4", min_value=0.0, format="%.2f", value=val_data[6])
+        ps2_e = st.number_input("P/S år -3", min_value=0.0, format="%.2f", value=val_data[7])
+        ps3_e = st.number_input("P/S år -2", min_value=0.0, format="%.2f", value=val_data[8])
+        ps4_e = st.number_input("P/S år -1", min_value=0.0, format="%.2f", value=val_data[9])
+
+        vinst_ar_e = st.number_input("Vinst prognos i år", format="%.2f", value=val_data[10])
+        vinst_nasta_ar_e = st.number_input("Vinst prognos nästa år", format="%.2f", value=val_data[11])
+
+        oms_i_ar_e = st.number_input("Omsättningstillväxt i år", format="%.2f", value=val_data[12])
+        oms_nasta_ar_e = st.number_input("Omsättningstillväxt nästa år", format="%.2f", value=val_data[13])
+
+        uppdatera = st.form_submit_button("Uppdatera bolag")
+        ta_bort = st.form_submit_button("Ta bort bolag")
+
+        if uppdatera:
+            ny_data = (
+                val_bolag,
+                nuvarande_kurs_e,
+                pe1_e, pe2_e, pe3_e, pe4_e,
+                ps

@@ -61,7 +61,7 @@ def berakna_undervardering(nuvarande_kurs, target_kurs):
     procent = (diff / nuvarande_kurs) * 100
     return procent
 
-# --- Appen ---
+# --- Streamlit App ---
 st.title("📈 Enkel Aktieanalysapp")
 
 # Lägg till bolag
@@ -94,39 +94,42 @@ with st.form("add_form", clear_on_submit=True):
             else:
                 st.error("Bolaget finns redan!")
 
-# Visa undervärderade bolag med minst 30% undervärdering
-st.header("📊 Bolag undervärderade med minst 30%")
-
+# --- Visa bolag ---
 df = hamta_allt()
+
+st.header("📂 Visa sparade bolag")
 
 if df.empty:
     st.info("Inga bolag sparade ännu.")
 else:
+    visa_alla = st.checkbox("🔍 Visa alla bolag")
+    visa_undervard = st.checkbox("📉 Visa endast undervärderade bolag (≥30%)")
+
     data_lista = []
-    for i, row in df.iterrows():
+
+    for _, row in df.iterrows():
         pe_list = [row['pe1'], row['pe2'], row['pe3'], row['pe4']]
         ps_list = [row['ps1'], row['ps2'], row['ps3'], row['ps4']]
 
-        target_pe_i_ar, target_ps_i_ar, target_avg_i_ar = berakna_targetkurs(pe_list, ps_list, row['vinst_ar'])
-        undervardering = berakna_undervardering(row['nuvarande_kurs'], target_avg_i_ar)
+        target_pe, target_ps, target_avg = berakna_targetkurs(pe_list, ps_list, row['vinst_ar'])
+        undervardering = berakna_undervardering(row['nuvarande_kurs'], target_avg)
 
-        if undervardering >= 30:
-            data_lista.append({
-                'Bolag': row['bolag'],
-                'Nuvarande kurs': row['nuvarande_kurs'],
-                'Target P/E i år': target_pe_i_ar,
-                'Target P/S i år': target_ps_i_ar,
-                'Target Genomsnitt i år': target_avg_i_ar,
-                'Undervärdering (%)': undervardering
-            })
+        data_lista.append({
+            'Bolag': row['bolag'],
+            'Nuvarande kurs': row['nuvarande_kurs'],
+            'Target P/E i år': target_pe,
+            'Target P/S i år': target_ps,
+            'Target Genomsnitt i år': target_avg,
+            'Undervärdering (%)': undervardering
+        })
 
-    if not data_lista:
-        st.info("Inga bolag är undervärderade med minst 30%.")
-    else:
-        df_visning = pd.DataFrame(data_lista)
+    df_visning = pd.DataFrame(data_lista)
+
+    if visa_undervard:
+        df_visning = df_visning[df_visning['Undervärdering (%)'] >= 30]
         df_visning = df_visning.sort_values(by='Undervärdering (%)', ascending=False)
 
-        # Formatera flyttal med 2 decimaler
+    if visa_alla or visa_undervard:
         df_visning['Nuvarande kurs'] = df_visning['Nuvarande kurs'].map('{:.2f}'.format)
         df_visning['Target P/E i år'] = df_visning['Target P/E i år'].map('{:.2f}'.format)
         df_visning['Target P/S i år'] = df_visning['Target P/S i år'].map('{:.2f}'.format)
@@ -134,3 +137,5 @@ else:
         df_visning['Undervärdering (%)'] = df_visning['Undervärdering (%)'].map('{:.2f} %'.format)
 
         st.dataframe(df_visning, use_container_width=True)
+    else:
+        st.info("Markera en ruta ovan för att visa bolag.")

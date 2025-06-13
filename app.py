@@ -1,3 +1,8 @@
+import os
+
+# Radera databasen en gång för att fixa kolumnproblemet
+if os.path.exists("aktier.db"):
+    os.remove("aktier.db")
 import streamlit as st
 import sqlite3
 import pandas as pd

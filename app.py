@@ -6,10 +6,11 @@ import pandas as pd
 conn = sqlite3.connect("aktier.db", check_same_thread=False)
 c = conn.cursor()
 
-# --- Skapa tabell om den inte finns ---
+# --- Skapa tabell (radera och återskapa för att rätta struktur) ---
 def skapa_tabell():
+    c.execute("DROP TABLE IF EXISTS bolag")  # Bara första gången du kör detta
     c.execute('''
-        CREATE TABLE IF NOT EXISTS bolag (
+        CREATE TABLE bolag (
             bolag TEXT PRIMARY KEY,
             nuvarande_kurs REAL,
             pe1 REAL, pe2 REAL, pe3 REAL, pe4 REAL,
@@ -22,12 +23,12 @@ def skapa_tabell():
 
 skapa_tabell()
 
-# --- Rensa hela tabellen (vid knapptryck) ---
+# --- Funktion för att rensa alla bolag (men inte databasen) ---
 def rensa_tabell():
     c.execute("DELETE FROM bolag")
     conn.commit()
 
-# --- Hämta alla bolag ---
+# --- Hämta bolag från databasen ---
 def hamta_bolag():
     return pd.read_sql("SELECT * FROM bolag ORDER BY bolag", conn)
 
@@ -57,8 +58,8 @@ def undervardering(target, current):
         return 0
     return ((target - current) / current) * 100
 
-# --- UI: Formulär ---
-st.title("📊 Aktieanalysapp")
+# --- UI ---
+st.title("📈 Aktieanalys")
 
 with st.form("aktieform", clear_on_submit=True):
     st.subheader("Lägg till eller uppdatera bolag")
@@ -87,21 +88,20 @@ with st.form("aktieform", clear_on_submit=True):
             )
             success, error = lagg_till_eller_uppdatera_bolag(data)
             if success:
-                st.success(f"{bolag} sparades!")
+                st.success(f"{bolag} sparades.")
             else:
                 st.error(f"Fel i databasen: {error}")
         else:
-            st.warning("Du måste ange ett bolagsnamn.")
+            st.warning("Ange bolagsnamn.")
 
-# --- Visa sparade bolag ---
-st.subheader("📁 Sparade bolag")
-
+# --- Visa bolag och analys ---
+st.subheader("📊 Analys av bolag")
 df = hamta_bolag()
 
 if df.empty:
-    st.info("Inga bolag tillagda ännu.")
+    st.info("Inga bolag sparade ännu.")
 else:
-    result = []
+    resultat = []
 
     for _, row in df.iterrows():
         pe_avg = genomsnitt([row['pe1'], row['pe2'], row['pe3'], row['pe4']])
@@ -115,30 +115,30 @@ else:
 
         underv = undervardering(target_avg, row['nuvarande_kurs'])
 
-        result.append({
+        resultat.append({
             "Bolag": row['bolag'],
             "Nuvarande kurs": row['nuvarande_kurs'],
             "Target P/E": round(target_pe, 2),
             "Target P/S": round(target_ps, 2),
-            "Target snitt": round(target_avg, 2),
+            "Target Snitt": round(target_avg, 2),
             "Undervärdering (%)": round(underv, 2)
         })
 
-    result_df = pd.DataFrame(result)
+    result_df = pd.DataFrame(resultat)
 
-    st.markdown("### Visa bolag")
+    st.markdown("### Filtrering:")
     visa_alla = st.checkbox("Visa alla bolag", value=True)
-    underv_filter = st.checkbox("Visa endast bolag som är ≥30% undervärderade")
+    visa_undervarderade = st.checkbox("Visa endast undervärderade (minst 30%)")
 
-    if underv_filter:
+    if visa_undervarderade:
         result_df = result_df[result_df["Undervärdering (%)"] >= 30]
         result_df = result_df.sort_values(by="Undervärdering (%)", ascending=False)
 
-    if visa_alla or underv_filter:
+    if visa_alla or visa_undervarderade:
         st.dataframe(result_df, use_container_width=True)
 
-# --- Rensa databasen ---
+# --- Töm alla bolag (frivillig funktion) ---
 st.markdown("---")
-if st.button("🗑 Rensa hela databasen"):
+if st.button("🗑 Rensa alla bolag i databasen"):
     rensa_tabell()
-    st.success("Alla bolag har raderats.")
+    st.success("Alla bolag raderades från databasen.")

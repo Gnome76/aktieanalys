@@ -54,18 +54,18 @@ def get_all_bolag():
     return rows
 
 def genomsnitt(values):
-    vals = [v for v in values if v is not None]
+    vals = [v for v in values if v is not None and v > 0]
     return sum(vals)/len(vals) if vals else None
 
 def targetkurs_pe(pe_values, vinst):
     pe_avg = genomsnitt(pe_values)
-    if pe_avg is None or vinst is None:
+    if pe_avg is None or vinst is None or vinst <= 0:
         return None
     return pe_avg * vinst
 
 def targetkurs_ps(ps_values, oms):
     ps_avg = genomsnitt(ps_values)
-    if ps_avg is None or oms is None:
+    if ps_avg is None or oms is None or oms <= 0:
         return None
     return ps_avg * oms
 
@@ -74,7 +74,7 @@ def main():
 
     init_db()
 
-    # Session state för att hålla fälten
+    # Session state för formulärdata
     if "form_data" not in st.session_state:
         st.session_state.form_data = {
             "bolag": "",
@@ -92,10 +92,6 @@ def main():
             "oms_i_ar": 0.0,
             "oms_nasta_ar": 0.0
         }
-
-    def reset_form():
-        for key in st.session_state.form_data.keys():
-            st.session_state.form_data[key] = "" if isinstance(st.session_state.form_data[key], str) else 0.0
 
     with st.form("form_lagg_till"):
         st.subheader("Lägg till eller uppdatera bolag")
@@ -138,7 +134,7 @@ def main():
                 add_or_update_bolag(data)
                 st.success(f"Bolaget '{bolag}' sparat/uppdaterat!")
 
-                # Spara i session state
+                # Nollställ formulärfält
                 st.session_state.form_data = {
                     "bolag": "",
                     "nuvarande_kurs": 0.0,
@@ -156,52 +152,55 @@ def main():
                     "oms_nasta_ar": 0.0
                 }
 
-    # --- Visa bolag ---
     st.markdown("---")
-    st.subheader("Alla bolag i databasen")
+    st.subheader("Bolagslista och värdering")
 
     alla_bolag = get_all_bolag()
 
     if not alla_bolag:
         st.info("Inga bolag sparade ännu.")
-    else:
-        filter_undervarderade = st.checkbox("Visa endast bolag undervärderade minst 30%")
+        return
 
-        bolag_data = []
-        for row in alla_bolag:
-            (
-                bolag, kurs, pe1, pe2, pe3, pe4,
-                ps1, ps2, ps3, ps4,
-                vinst_ar, vinst_nasta_ar,
-                oms_i_ar, oms_nasta_ar
-            ) = row
+    filter_undervarderade = st.checkbox("Visa endast bolag undervärderade med minst 30%")
 
-            pe_vals = [pe1, pe2, pe3, pe4]
-            ps_vals = [ps1, ps2, ps3, ps4]
+    bolag_data = []
+    for row in alla_bolag:
+        (
+            bolag, kurs, pe1, pe2, pe3, pe4,
+            ps1, ps2, ps3, ps4,
+            vinst_ar, vinst_nasta_ar,
+            oms_i_ar, oms_nasta_ar
+        ) = row
 
-            target_pe_ar = targetkurs_pe(pe_vals, vinst_ar)
-            target_pe_nasta_ar = targetkurs_pe(pe_vals, vinst_nasta_ar)
-            target_ps_ar = targetkurs_ps(ps_vals, oms_i_ar)
-            target_ps_nasta_ar = targetkurs_ps(ps_vals, oms_nasta_ar)
+        pe_vals = [pe1, pe2, pe3, pe4]
+        ps_vals = [ps1, ps2, ps3, ps4]
 
-            targets = [t for t in [target_pe_ar, target_pe_nasta_ar, target_ps_ar, target_ps_nasta_ar] if t is not None]
-            target_genomsnitt = sum(targets)/len(targets) if targets else None
+        target_pe_ar = targetkurs_pe(pe_vals, vinst_ar)
+        target_pe_nasta_ar = targetkurs_pe(pe_vals, vinst_nasta_ar)
+        target_ps_ar = targetkurs_ps(ps_vals, oms_i_ar)
+        target_ps_nasta_ar = targetkurs_ps(ps_vals, oms_nasta_ar)
 
-            undervardering_pct = None
-            if target_genomsnitt is not None:
-                undervardering_pct = (target_genomsnitt - kurs) / kurs * 100
+        # Genomsnitt av P/E- och P/S-targetkurser för i år och nästa år (de som finns)
+        targets = [t for t in [target_pe_ar, target_pe_nasta_ar, target_ps_ar, target_ps_nasta_ar] if t is not None]
+        target_genomsnitt = sum(targets)/len(targets) if targets else None
 
-            bolag_data.append({
-                "Bolag": bolag,
-                "Nuvarande kurs": kurs,
-                "Target P/E i år": target_pe_ar,
-                "Target P/E nästa år": target_pe_nasta_ar,
-                "Target P/S i år": target_ps_ar,
-                "Target P/S nästa år": target_ps_nasta_ar,
-                "Genomsnittlig targetkurs": target_genomsnitt,
-                "Undervärdering %": undervardering_pct
-            })
+        undervardering_pct = None
+        if target_genomsnitt is not None and kurs > 0:
+            undervardering_pct = (target_genomsnitt - kurs) / kurs * 100
 
-        if filter_undervarderade:
-            bolag_data = [b for b in bolag_data if b["Undervärdering %"] is not None and b["Undervärdering %"] >= 30]
-            bolag_data =
+        bolag_data.append({
+            "Bolag": bolag,
+            "Nuvarande kurs": kurs,
+            "Target P/E i år": target_pe_ar,
+            "Target P/E nästa år": target_pe_nasta_ar,
+            "Target P/S i år": target_ps_ar,
+            "Target P/S nästa år": target_ps_nasta_ar,
+            "Genomsnittlig targetkurs": target_genomsnitt,
+            "Undervärdering %": undervardering_pct
+        })
+
+    # Filtrera undervärderade om kryssrutan är satt
+    if filter_undervarderade:
+        bolag_data = [b for b in bolag_data if b["Undervärdering %"] is not None and b["Undervärdering %"] >= 30]
+
+    # Sortera

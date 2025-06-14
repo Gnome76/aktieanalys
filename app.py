@@ -166,15 +166,12 @@ def main():
         st.info("Inga bolag sparade än.")
         return
 
-    # Beräkna targetkurser baserat på vinst och P/E, P/S
+    # Beräkna targetkurser
     df["targetkurs_pe"] = df["vinst_nastaar"] * ((df["pe1"] + df["pe2"]) / 2)
-    # Enkla targetkurs P/S baserat på nuvarande kurs och ps1 (för demo)
     df["targetkurs_ps"] = df["nuvarande_kurs"] / df["ps1"].replace(0, 1)
 
-    # Undervärdering i %
     df["undervarde_pe"] = (df["targetkurs_pe"] - df["nuvarande_kurs"]) / df["targetkurs_pe"] * 100
     df["undervarde_ps"] = (df["targetkurs_ps"] - df["nuvarande_kurs"]) / df["targetkurs_ps"] * 100
-
     df["undervarde_min"] = df[["undervarde_pe", "undervarde_ps"]].min(axis=1)
 
     visa_endast = st.checkbox("Visa endast bolag minst 30% undervärderade", value=st.session_state["visa_endast_undervarde"])

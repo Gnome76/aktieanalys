@@ -54,44 +54,9 @@ def ta_bort_bolag(namn):
     conn.commit()
     conn.close()
 
-def berakna_targetkurs(pe_vardena, ps_vardena, vinst_arsprognos, vinst_nastaar, nuvarande_kurs):
-    genomsnitt_pe = sum(pe_vardena) / len(pe_vardena)
-    genomsnitt_ps = sum(ps_vardena) / len(ps_vardena)
-
-    target_pe_ars = genomsnitt_pe * vinst_arsprognos if vinst_arsprognos else None
-    target_pe_nastaar = genomsnitt_pe * vinst_nastaar if vinst_nastaar else None
-    target_ps_ars = genomsnitt_ps * vinst_arsprognos if vinst_arsprognos else None
-    target_ps_nastaar = genomsnitt_ps * vinst_nastaar if vinst_nastaar else None
-
-    target_genomsnitt_ars = None
-    target_genomsnitt_nastaar = None
-    if target_pe_ars and target_ps_ars:
-        target_genomsnitt_ars = (target_pe_ars + target_ps_ars) / 2
-    if target_pe_nastaar and target_ps_nastaar:
-        target_genomsnitt_nastaar = (target_pe_nastaar + target_ps_nastaar) / 2
-
-    undervardering_genomsnitt_ars = None
-    undervardering_genomsnitt_nastaar = None
-
-    if nuvarande_kurs and target_genomsnitt_ars:
-        undervardering_genomsnitt_ars = (target_genomsnitt_ars / nuvarande_kurs) - 1
-    if nuvarande_kurs and target_genomsnitt_nastaar:
-        undervardering_genomsnitt_nastaar = (target_genomsnitt_nastaar / nuvarande_kurs) - 1
-
-    kopvard_ars = target_genomsnitt_ars * 0.7 if target_genomsnitt_ars else None
-    kopvard_nastaar = target_genomsnitt_nastaar * 0.7 if target_genomsnitt_nastaar else None
-
-    return {
-        "target_genomsnitt_ars": target_genomsnitt_ars,
-        "target_genomsnitt_nastaar": target_genomsnitt_nastaar,
-        "undervardering_genomsnitt_ars": undervardering_genomsnitt_ars,
-        "undervardering_genomsnitt_nastaar": undervardering_genomsnitt_nastaar,
-        "kopvard_ars": kopvard_ars,
-        "kopvard_nastaar": kopvard_nastaar
-    }
-
 def main():
-    st.title("Aktieinnehav – Spara, redigera och analysera")
+    st.title("Aktieinnehav - Spara och redigera bolag")
+
     init_db()
 
     bolag_lista = hamta_alla_bolag()
@@ -107,19 +72,14 @@ def main():
         ]
     ) if bolag_lista else pd.DataFrame()
 
-    # ========================
-    # REDIGERA ELLER LÄGG TILL
-    # ========================
-
-    st.header("Lägg till eller redigera bolag")
+    st.header("Redigera befintligt bolag eller lägg till nytt")
 
     val_av_bolag = st.selectbox(
-        "Välj bolag att redigera (eller välj tomt för nytt)",
+        "Välj bolag att redigera (eller välj tomt för nytt):",
         options=[""] + (df["namn"].tolist() if not df.empty else [])
     )
 
-    if val_av_bolag and val_av_bolag != "":
-        # Visa data från valt bolag i formulär för redigering
+    if val_av_bolag:
         vald_rad = df[df["namn"] == val_av_bolag].iloc[0]
         namn = val_av_bolag
         nuvarande_kurs = st.number_input("Nuvarande kurs", min_value=0.0, value=float(vald_rad["nuvarande_kurs"]), format="%.2f")
@@ -150,10 +110,10 @@ def main():
             )
             spara_bolag(data)
             st.success(f"Bolag '{namn}' uppdaterat!")
-            st.experimental_rerun()
+            # Uppdatera sidan genom att tvinga omstart utan experimental_rerun
+            st.experimental_set_query_params(reload=str(datetime.now()))
 
     else:
-        # Lägg till nytt bolag
         with st.form("form_lagg_till_bolag", clear_on_submit=True):
             namn = st.text_input("Bolagsnamn (unik)")
             nuvarande_kurs = st.number_input("Nuvarande kurs", min_value=0.0, format="%.2f")
@@ -189,63 +149,18 @@ def main():
                     )
                     spara_bolag(data)
                     st.success(f"Bolag '{namn}' sparat!")
-                    st.experimental_rerun()
+                    st.experimental_set_query_params(reload=str(datetime.now()))
 
-    # =======================================
-    # Visa och filtrera undervärderade bolag
-    # =======================================
-
+    # Visa lista över bolag
+    st.header("Sparade bolag")
     if not df.empty:
-        resultats = []
-        for _, row in df.iterrows():
-            res = berakna_targetkurs(
-                [row.pe1, row.pe2, row.pe3, row.pe4],
-                [row.ps1, row.ps2, row.ps3, row.ps4],
-                row.vinst_arsprognos,
-                row.vinst_nastaar,
-                row.nuvarande_kurs,
-            )
-            resultats.append(res)
-
-        df_target = pd.DataFrame(resultats)
-        df_display = pd.concat([df.reset_index(drop=True), df_target], axis=1)
-
-        df_display = df_display[
-            (df_display["undervardering_genomsnitt_ars"] > 0) |
-            (df_display["undervardering_genomsnitt_nastaar"] > 0)
-        ].copy()
-
-        df_display["max_undervardering"] = df_display[["undervardering_genomsnitt_ars", "undervardering_genomsnitt_nastaar"]].max(axis=1)
-        df_display = df_display.sort_values(by="max_undervardering", ascending=False).reset_index(drop=True)
-
-        st.header("Bolag sorterade efter mest undervärderad (undervärdering > 0%)")
-
-        valt_bolag_visning = st.selectbox("Välj bolag att visa", df_display["namn"].tolist())
-
-        if valt_bolag_visning:
-            valt_rad = df_display[df_display["namn"] == valt_bolag_visning].iloc[0]
-            st.write(f"**Nuvarande kurs:** {valt_rad['nuvarande_kurs']:.2f} kr")
-            if valt_rad["target_genomsnitt_ars"] is not None:
-                st.write(f"**Targetkurs år:** {valt_rad['target_genomsnitt_ars']:.2f} kr")
-            if valt_rad["target_genomsnitt_nastaar"] is not None:
-                st.write(f"**Targetkurs nästa år:** {valt_rad['target_genomsnitt_nastaar']:.2f} kr")
-            if valt_rad["undervardering_genomsnitt_ars"] is not None:
-                st.write(f"**Undervärdering i år:** {valt_rad['undervardering_genomsnitt_ars']:.0%}")
-            if valt_rad["undervardering_genomsnitt_nastaar"] is not None:
-                st.write(f"**Undervärdering nästa år:** {valt_rad['undervardering_genomsnitt_nastaar']:.0%}")
-            if valt_rad["kopvard_ars"] is not None:
-                st.write(f"**Köpvärd upp till (i år):** {valt_rad['kopvard_ars']:.2f} kr")
-            if valt_rad["kopvard_nastaar"] is not None:
-                st.write(f"**Köpvärd upp till (nästa år):** {valt_rad['kopvard_nastaar']:.2f} kr")
-
-        # Ta bort bolag
-        st.header("🗑️ Ta bort bolag")
-        namn_radera = st.selectbox("Välj bolag att ta bort", df["namn"].tolist(), key="radera")
-        if st.button("Ta bort valt bolag"):
-            ta_bort_bolag(namn_radera)
-            st.success(f"Bolag '{namn_radera}' har tagits bort.")
-            st.experimental_rerun()
-
+        st.dataframe(df.drop(columns=["insatt_datum"]))
+        namn_att_ta_bort = st.selectbox("Välj bolag att ta bort", options=[""] + df["namn"].tolist())
+        if namn_att_ta_bort != "":
+            if st.button(f"Ta bort '{namn_att_ta_bort}'"):
+                ta_bort_bolag(namn_att_ta_bort)
+                st.success(f"Bolag '{namn_att_ta_bort}' borttaget!")
+                st.experimental_set_query_params(reload=str(datetime.now()))
     else:
         st.info("Inga bolag sparade ännu.")
 

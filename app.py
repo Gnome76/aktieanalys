@@ -55,8 +55,8 @@ def ta_bort_bolag(namn):
 
 # Beräkna targetkurser och undervärdering
 def berakna_targetkurs(pe_vardena, ps_vardena, vinst_arsprognos, vinst_nastaar, nuvarande_kurs):
-    genomsnitt_pe = sum(pe_vardena) / len(pe_vardena) if all(pe_vardena) else None
-    genomsnitt_ps = sum(ps_vardena) / len(ps_vardena) if all(ps_vardena) else None
+    genomsnitt_pe = sum(pe_vardena) / len(pe_vardena)
+    genomsnitt_ps = sum(ps_vardena) / len(ps_vardena)
     
     target_pe_ars = genomsnitt_pe * vinst_arsprognos if vinst_arsprognos and genomsnitt_pe else None
     target_pe_nastaar = genomsnitt_pe * vinst_nastaar if vinst_nastaar and genomsnitt_pe else None
@@ -170,25 +170,38 @@ def main():
             target_lista.append(resultat)
 
         df_target = pd.DataFrame(target_lista)
-
         df_display = pd.concat([df.reset_index(drop=True), df_target], axis=1)
 
         st.subheader("Alla sparade bolag")
-        st.dataframe(df_display[[
-            "namn",
-            "nuvarande_kurs",
-            "target_pe_ars",
-            "target_pe_nastaar",
-            "target_ps_ars",
-            "target_ps_nastaar",
-            "target_genomsnitt_ars",
-            "target_genomsnitt_nastaar",
-            "undervardering_pe_ars",
-            "undervardering_pe_nastaar",
-            "undervardering_genomsnitt_ars",
-            "undervardering_genomsnitt_nastaar",
-        ]].style.format({
-            "nuvarande_kurs": "{:.2f}",
-            "target_pe_ars": "{:.2f}",
-            "target_pe_nastaar": "{:.2f}",
-            "target_ps_ars":
+        st.dataframe(
+            df_display[[
+                "namn",
+                "nuvarande_kurs",
+                "target_pe_ars",
+                "target_pe_nastaar",
+                "target_ps_ars",
+                "target_ps_nastaar",
+                "target_genomsnitt_ars",
+                "target_genomsnitt_nastaar",
+                "undervardering_pe_ars",
+                "undervardering_pe_nastaar",
+                "undervardering_genomsnitt_ars",
+                "undervardering_genomsnitt_nastaar",
+            ]].style.format({
+                "nuvarande_kurs": "{:.2f}",
+                "target_pe_ars": "{:.2f}",
+                "target_pe_nastaar": "{:.2f}",
+                "target_ps_ars": "{:.2f}",
+                "target_ps_nastaar": "{:.2f}",
+                "target_genomsnitt_ars": "{:.2f}",
+                "target_genomsnitt_nastaar": "{:.2f}",
+                "undervardering_pe_ars": "{:.2%}",
+                "undervardering_pe_nastaar": "{:.2%}",
+                "undervardering_genomsnitt_ars": "{:.2%}",
+                "undervardering_genomsnitt_nastaar": "{:.2%}",
+            })
+        )
+
+        # Filter undervärderade bolag minst 30%
+        if st.checkbox("Visa bara bolag minst 30% undervärderade (genomsnitt target år i år)"):
+            undervarderade

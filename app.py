@@ -110,8 +110,7 @@ def main():
             )
             spara_bolag(data)
             st.success(f"Bolag '{namn}' uppdaterat!")
-            # Uppdatera sidan genom att tvinga omstart utan experimental_rerun
-            st.experimental_set_query_params(reload=str(datetime.now()))
+            # Efter sparande kommer appen att reruna automatiskt pga knapptryck
 
     else:
         with st.form("form_lagg_till_bolag", clear_on_submit=True):
@@ -149,7 +148,7 @@ def main():
                     )
                     spara_bolag(data)
                     st.success(f"Bolag '{namn}' sparat!")
-                    st.experimental_set_query_params(reload=str(datetime.now()))
+                    # Form submit gör automatiskt rerun
 
     # Visa lista över bolag
     st.header("Sparade bolag")
@@ -160,7 +159,7 @@ def main():
             if st.button(f"Ta bort '{namn_att_ta_bort}'"):
                 ta_bort_bolag(namn_att_ta_bort)
                 st.success(f"Bolag '{namn_att_ta_bort}' borttaget!")
-                st.experimental_set_query_params(reload=str(datetime.now()))
+                # Ta bort-knapp trigger rerun automatiskt
     else:
         st.info("Inga bolag sparade ännu.")
 

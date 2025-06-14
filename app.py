@@ -166,9 +166,9 @@ def main():
         st.info("Inga bolag sparade än.")
         return
 
-    # Beräkna targetkurser
+    # ✅ RÄTT BERÄKNING AV TARGETKURSER:
     df["targetkurs_pe"] = df["vinst_nastaar"] * ((df["pe1"] + df["pe2"]) / 2)
-    df["targetkurs_ps"] = df["nuvarande_kurs"] / df["ps1"].replace(0, 1)
+    df["targetkurs_ps"] = df["nuvarande_kurs"] * ((df["ps1"] + df["ps2"]) / 2) / df["ps1"].replace(0, 1)
 
     df["undervarde_pe"] = (df["targetkurs_pe"] - df["nuvarande_kurs"]) / df["targetkurs_pe"] * 100
     df["undervarde_ps"] = (df["targetkurs_ps"] - df["nuvarande_kurs"]) / df["targetkurs_ps"] * 100
@@ -197,10 +197,9 @@ def main():
     bolag = df_undervarde.iloc[idx]
 
     st.header(f"Bolag {idx+1} av {len(df_undervarde)}: {bolag['namn']}")
-
     st.write(f"**Nuvarande kurs:** {bolag['nuvarande_kurs']:.2f} SEK")
     st.write(f"**Targetkurs P/E (år 1-2 medel):** {bolag['targetkurs_pe']:.2f} SEK")
-    st.write(f"**Targetkurs P/S (år 1):** {bolag['targetkurs_ps']:.2f} SEK")
+    st.write(f"**Targetkurs P/S (år 1-2 medel):** {bolag['targetkurs_ps']:.2f} SEK")
     st.write(f"**Undervärdering (min av P/E och P/S):** {bolag['undervarde_min']:.2f} %")
 
     st.write("---")

@@ -5,7 +5,7 @@ from datetime import datetime
 
 DB_NAME = "bolag.db"
 
-# Initiera databasen och skapa tabell om den inte finns (inkl datumfält)
+# Initiera databasen och skapa tabell om den inte finns
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -25,24 +25,28 @@ def init_db():
             vinst_nastaar REAL,
             omsattningstillvaxt_arsprognos REAL,
             omsattningstillvaxt_nastaar REAL,
-            datum TEXT
+            insatt_datum TEXT
         )
     """)
     conn.commit()
     conn.close()
 
-# Uppgradera befintlig databas och lägg till datum-kolumn om den saknas
-def uppgradera_databas_med_datum():
+# Migreringsfunktion som lägger till kolumn insatt_datum om den saknas och uppdaterar befintliga rader
+def migrera_databas():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("PRAGMA table_info(bolag)")
     kolumner = [info[1] for info in c.fetchall()]
-    if "datum" not in kolumner:
-        c.execute("ALTER TABLE bolag ADD COLUMN datum TEXT")
-        # Sätt dagens datum för existerande rader
-        c.execute("UPDATE bolag SET datum = ?", (datetime.today().strftime("%Y-%m-%d"),))
+    if "insatt_datum" not in kolumner:
+        c.execute("ALTER TABLE bolag ADD COLUMN insatt_datum TEXT")
+        idag = datetime.now().strftime("%Y-%m-%d")
+        c.execute("UPDATE bolag SET insatt_datum = ? WHERE insatt_datum IS NULL", (idag,))
         conn.commit()
-    conn.close()
+        conn.close()
+        return "Migrering klar! Kolumn insatt_datum är tillagd."
+    else:
+        conn.close()
+        return "Kolumn insatt_datum finns redan."
 
 def spara_bolag(data):
     conn = sqlite3.connect(DB_NAME)
@@ -61,10 +65,10 @@ def hamta_alla_bolag():
     conn.close()
     return rows
 
-def hamta_alla_bolag_datumordning():
+def hamta_bolag_sorterat_pa_datum():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT * FROM bolag ORDER BY datum ASC, namn COLLATE NOCASE ASC")
+    c.execute("SELECT * FROM bolag ORDER BY insatt_datum ASC")
     rows = c.fetchall()
     conn.close()
     return rows
@@ -115,14 +119,12 @@ def berakna_targetkurs(pe_vardena, ps_vardena, vinst_arsprognos, vinst_nastaar, 
 
 def main():
     st.title("Aktieinnehav – Spara och analysera")
-
-    # Initiera och uppgradera databas
     init_db()
-    uppgradera_databas_med_datum()
 
-    # Hantera refresh utan st.experimental_rerun()
-    if 'refresh' not in st.session_state:
-        st.session_state['refresh'] = False
+    # Migreringsknapp (kör EN gång!)
+    if st.button("Kör databas-migrering (lägg till insatt_datum)"):
+        msg = migrera_databas()
+        st.success(msg)
 
     # Formulär för att lägga till nytt bolag
     with st.form("form_lagg_till_bolag", clear_on_submit=True):
@@ -147,6 +149,7 @@ def main():
             if namn.strip() == "":
                 st.error("Bolagsnamn måste anges.")
             else:
+                idag = datetime.now().strftime("%Y-%m-%d")
                 data = (
                     namn.strip(),
                     nuvarande_kurs,
@@ -156,11 +159,10 @@ def main():
                     vinst_nastaar,
                     omsattningstillvaxt_arsprognos,
                     omsattningstillvaxt_nastaar,
-                    datetime.today().strftime("%Y-%m-%d")
+                    idag
                 )
                 spara_bolag(data)
                 st.success(f"Bolag '{namn}' sparat!")
-                st.session_state['refresh'] = True
 
     bolag = hamta_alla_bolag()
     if bolag:
@@ -172,7 +174,7 @@ def main():
                 "ps1", "ps2", "ps3", "ps4",
                 "vinst_arsprognos", "vinst_nastaar",
                 "omsattningstillvaxt_arsprognos", "omsattningstillvaxt_nastaar",
-                "datum"
+                "insatt_datum"
             ]
         )
 
@@ -213,40 +215,43 @@ def main():
                 if st.button("Nästa ➡️") and st.session_state.idx < total - 1:
                     st.session_state.idx += 1
 
-            bolag_valt = undervarderade.iloc[st.session_state.idx]
+            bolag_vald = undervarderade.iloc[st.session_state.idx]
 
-            st.markdown(f"### {bolag_valt['namn']}")
-            st.write(f"**Nuvarande kurs:** {bolag_valt['nuvarande_kurs']:.2f} kr")
-            st.write(f"**Targetkurs år:** {bolag_valt['target_genomsnitt_ars']:.2f} kr")
-            st.write(f"**Targetkurs nästa år:** {bolag_valt['target_genomsnitt_nastaar']:.2f} kr")
-            st.write(f"**Undervärdering i år:** {bolag_valt['undervardering_genomsnitt_ars']:.0%}")
-            st.write(f"**Undervärdering nästa år:** {bolag_valt['undervardering_genomsnitt_nastaar']:.0%}")
-            st.write(f"**Köpvärd upp till (i år):** {bolag_valt['kopvard_ars']:.2f} kr")
-            st.write(f"**Köpvärd upp till (nästa år):** {bolag_valt['kopvard_nastaar']:.2f} kr")
+            st.markdown(f"### {bolag_vald['namn']}")
+            st.write(f"**Nuvarande kurs:** {bolag_vald['nuvarande_kurs']:.2f} kr")
+            st.write(f"**Targetkurs år:** {bolag_vald['target_genomsnitt_ars']:.2f} kr")
+            st.write(f"**Targetkurs nästa år:** {bolag_vald['target_genomsnitt_nastaar']:.2f} kr")
+            st.write(f"**Undervärdering i år:** {bolag_vald['undervardering_genomsnitt_ars']:.0%}")
+            st.write(f"**Undervärdering nästa år:** {bolag_vald['undervardering_genomsnitt_nastaar']:.0%}")
+            st.write(f"**Köpvärd upp till (i år):** {bolag_vald['kopvard_ars']:.2f} kr")
+            st.write(f"**Köpvärd upp till (nästa år):** {bolag_vald['kopvard_nastaar']:.2f} kr")
             st.caption(f"Bolag {st.session_state.idx + 1} av {total}")
-
-        # Två rullistor för borttagning
 
         st.subheader("Ta bort bolag")
 
-        # 1. Rullista bokstavsordning
-        namn_radera_alfabet = st.selectbox("Välj bolag att ta bort (bokstavsordning)", options=df["namn"])
-        if st.button("Ta bort valt bolag (bokstavsordning)"):
-            ta_bort_bolag(namn_radera_alfabet)
-            st.success(f"Bolag '{namn_radera_alfabet}' borttaget.")
-            st.session_state['refresh'] = True
+        # Rullista sorterad på namn (bokstavsordning)
+        options_namn = df["namn"].tolist()
+        namn_radera = st.selectbox("Välj bolag att ta bort (bokstavsordning)", options=options_namn)
 
-        # 2. Rullista datumordning, visa datum bredvid namn
-        bolag_datum = hamta_alla_bolag_datumordning()
-        df_datum = pd.DataFrame(
-            bolag_datum,
-            columns=[
-                "namn", "nuvarande_kurs",
-                "pe1", "pe2", "pe3", "pe4",
-                "ps1", "ps2", "ps3", "ps4",
-                "vinst_arsprognos", "vinst_nastaar",
-                "omsattningstillvaxt_arsprognos", "omsattningstillvaxt_nastaar",
-                "datum"
-            ]
-        )
-        options_datum = df_datum.apply(lambda r: f"{r['namn']} (ins
+        # Rullista sorterad på datum insatt (äldsta först)
+        df_datum = df.sort_values("insatt_datum", ascending=True)
+        options_datum = df_datum.apply(lambda r: f"{r['namn']} (insatt: {r['insatt_datum']})", axis=1).tolist()
+        val_datum = st.selectbox("Välj bolag att ta bort (datumordning)", options=options_datum)
+
+        if st.button("Ta bort valt bolag (namn)"):
+            ta_bort_bolag(namn_radera)
+            st.success(f"Bolag '{namn_radera}' borttaget.")
+            st.experimental_rerun()
+
+        if st.button("Ta bort valt bolag (datum)"):
+            # Extrahera namn ur strängen som visas i datum-rullistan, ex "Bolagsnamn (insatt: 2025-06-14)"
+            namn_fran_datum = val_datum.split(" (insatt:")[0]
+            ta_bort_bolag(namn_fran_datum)
+            st.success(f"Bolag '{namn_fran_datum}' borttaget.")
+            st.experimental_rerun()
+
+    else:
+        st.info("Inga bolag sparade ännu.")
+
+if __name__ == "__main__":
+    main()

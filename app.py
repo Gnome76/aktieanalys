@@ -98,20 +98,20 @@ def main():
 
     # Formulär för att lägga till nytt bolag
     with st.form("form_lagg_till_bolag", clear_on_submit=True):
-        namn = st.text_input("Bolagsnamn (unik)", value="")
-        nuvarande_kurs = st.number_input("Nuvarande kurs", min_value=0.0, format="%.2f", value=0.0)
-        pe1 = st.number_input("P/E (år 1)", min_value=0.0, format="%.2f", value=0.0)
-        pe2 = st.number_input("P/E (år 2)", min_value=0.0, format="%.2f", value=0.0)
-        pe3 = st.number_input("P/E (år 3)", min_value=0.0, format="%.2f", value=0.0)
-        pe4 = st.number_input("P/E (år 4)", min_value=0.0, format="%.2f", value=0.0)
-        ps1 = st.number_input("P/S (år 1)", min_value=0.0, format="%.2f", value=0.0)
-        ps2 = st.number_input("P/S (år 2)", min_value=0.0, format="%.2f", value=0.0)
-        ps3 = st.number_input("P/S (år 3)", min_value=0.0, format="%.2f", value=0.0)
-        ps4 = st.number_input("P/S (år 4)", min_value=0.0, format="%.2f", value=0.0)
-        vinst_arsprognos = st.number_input("Vinst prognos i år", format="%.2f", value=0.0)
-        vinst_nastaar = st.number_input("Vinst prognos nästa år", format="%.2f", value=0.0)
-        omsattningstillvaxt_arsprognos = st.number_input("Omsättningstillväxt i år (%)", format="%.2f", value=0.0)
-        omsattningstillvaxt_nastaar = st.number_input("Omsättningstillväxt nästa år (%)", format="%.2f", value=0.0)
+        namn = st.text_input("Bolagsnamn (unik)")
+        nuvarande_kurs = st.number_input("Nuvarande kurs", min_value=0.0, format="%.2f")
+        pe1 = st.number_input("P/E (år 1)", min_value=0.0, format="%.2f")
+        pe2 = st.number_input("P/E (år 2)", min_value=0.0, format="%.2f")
+        pe3 = st.number_input("P/E (år 3)", min_value=0.0, format="%.2f")
+        pe4 = st.number_input("P/E (år 4)", min_value=0.0, format="%.2f")
+        ps1 = st.number_input("P/S (år 1)", min_value=0.0, format="%.2f")
+        ps2 = st.number_input("P/S (år 2)", min_value=0.0, format="%.2f")
+        ps3 = st.number_input("P/S (år 3)", min_value=0.0, format="%.2f")
+        ps4 = st.number_input("P/S (år 4)", min_value=0.0, format="%.2f")
+        vinst_arsprognos = st.number_input("Vinst prognos i år", format="%.2f")
+        vinst_nastaar = st.number_input("Vinst prognos nästa år", format="%.2f")
+        omsattningstillvaxt_arsprognos = st.number_input("Omsättningstillväxt i år (%)", format="%.2f")
+        omsattningstillvaxt_nastaar = st.number_input("Omsättningstillväxt nästa år (%)", format="%.2f")
 
         lagg_till = st.form_submit_button("Lägg till bolag")
 
@@ -203,4 +203,16 @@ def main():
         namn_radera = st.selectbox("📋 Välj bolag (A–Ö)", options=df.sort_values("namn")["namn"])
         # Datumordning
         df_datum = df.sort_values("insatt_datum")
-        options_datum = df_datum.apply(lambda r: f"{r['namn']} (insatt {r
+        options_datum = df_datum.apply(lambda r: f"{r['namn']} (insatt {r['insatt_datum'][:10]})", axis=1).tolist()
+        namn_map = dict(zip(options_datum, df_datum["namn"]))
+        namn_radera_datum = st.selectbox("🕒 Välj bolag (äldsta först)", options=options_datum)
+
+        if st.button("🗑️ Ta bort valt bolag"):
+            ta_bort_bolag(namn_map[namn_radera_datum])
+            st.success(f"Bolag '{namn_map[namn_radera_datum]}' borttaget.")
+
+    else:
+        st.info("Inga bolag sparade ännu.")
+
+if __name__ == "__main__":
+    main()

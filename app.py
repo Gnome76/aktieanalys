@@ -2,12 +2,12 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 
-DB_NAME = "aktier.db"
+DB_NAME = "aktier_v2.db"  # ändrat!
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    # ⚠️ Tar bort tabellen om den finns (nollställer allt)
+    # Skapa om tabellen helt (dödar tidigare data)
     c.execute("DROP TABLE IF EXISTS bolag")
     c.execute("""
         CREATE TABLE IF NOT EXISTS bolag (

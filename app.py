@@ -97,21 +97,21 @@ def main():
     init_db()
 
     # Formulär för att lägga till nytt bolag
-    with st.form("form_lagg_till_bolag", clear_on_submit=True):
-        namn = st.text_input("Bolagsnamn (unik)")
-        nuvarande_kurs = st.number_input("Nuvarande kurs", min_value=0.0, format="%.2f")
-        pe1 = st.number_input("P/E (år 1)", min_value=0.0, format="%.2f")
-        pe2 = st.number_input("P/E (år 2)", min_value=0.0, format="%.2f")
-        pe3 = st.number_input("P/E (år 3)", min_value=0.0, format="%.2f")
-        pe4 = st.number_input("P/E (år 4)", min_value=0.0, format="%.2f")
-        ps1 = st.number_input("P/S (år 1)", min_value=0.0, format="%.2f")
-        ps2 = st.number_input("P/S (år 2)", min_value=0.0, format="%.2f")
-        ps3 = st.number_input("P/S (år 3)", min_value=0.0, format="%.2f")
-        ps4 = st.number_input("P/S (år 4)", min_value=0.0, format="%.2f")
-        vinst_arsprognos = st.number_input("Vinst prognos i år", format="%.2f")
-        vinst_nastaar = st.number_input("Vinst prognos nästa år", format="%.2f")
-        omsattningstillvaxt_arsprognos = st.number_input("Omsättningstillväxt i år (%)", format="%.2f")
-        omsattningstillvaxt_nastaar = st.number_input("Omsättningstillväxt nästa år (%)", format="%.2f")
+    with st.form("form_lagg_till_bolag", clear_on_submit=False):
+        namn = st.text_input("Bolagsnamn (unik)", key="namn")
+        nuvarande_kurs = st.number_input("Nuvarande kurs", min_value=0.0, format="%.2f", key="nuvarande_kurs")
+        pe1 = st.number_input("P/E (år 1)", min_value=0.0, format="%.2f", key="pe1")
+        pe2 = st.number_input("P/E (år 2)", min_value=0.0, format="%.2f", key="pe2")
+        pe3 = st.number_input("P/E (år 3)", min_value=0.0, format="%.2f", key="pe3")
+        pe4 = st.number_input("P/E (år 4)", min_value=0.0, format="%.2f", key="pe4")
+        ps1 = st.number_input("P/S (år 1)", min_value=0.0, format="%.2f", key="ps1")
+        ps2 = st.number_input("P/S (år 2)", min_value=0.0, format="%.2f", key="ps2")
+        ps3 = st.number_input("P/S (år 3)", min_value=0.0, format="%.2f", key="ps3")
+        ps4 = st.number_input("P/S (år 4)", min_value=0.0, format="%.2f", key="ps4")
+        vinst_arsprognos = st.number_input("Vinst prognos i år", format="%.2f", key="vinst_arsprognos")
+        vinst_nastaar = st.number_input("Vinst prognos nästa år", format="%.2f", key="vinst_nastaar")
+        omsattningstillvaxt_arsprognos = st.number_input("Omsättningstillväxt i år (%)", format="%.2f", key="omsattningstillvaxt_arsprognos")
+        omsattningstillvaxt_nastaar = st.number_input("Omsättningstillväxt nästa år (%)", format="%.2f", key="omsattningstillvaxt_nastaar")
 
         lagg_till = st.form_submit_button("Lägg till bolag")
 
@@ -132,6 +132,22 @@ def main():
                 )
                 spara_bolag(data)
                 st.success(f"Bolag '{namn}' sparat!")
+
+                # Nollställ fält i session_state
+                st.session_state.namn = ""
+                st.session_state.nuvarande_kurs = 0.0
+                st.session_state.pe1 = 0.0
+                st.session_state.pe2 = 0.0
+                st.session_state.pe3 = 0.0
+                st.session_state.pe4 = 0.0
+                st.session_state.ps1 = 0.0
+                st.session_state.ps2 = 0.0
+                st.session_state.ps3 = 0.0
+                st.session_state.ps4 = 0.0
+                st.session_state.vinst_arsprognos = 0.0
+                st.session_state.vinst_nastaar = 0.0
+                st.session_state.omsattningstillvaxt_arsprognos = 0.0
+                st.session_state.omsattningstillvaxt_nastaar = 0.0
 
     bolag = hamta_alla_bolag()
     if bolag:

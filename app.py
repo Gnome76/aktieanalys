@@ -4,7 +4,6 @@ import pandas as pd
 
 DB_NAME = "bolag.db"
 
-# Initiera databasen och skapa tabell om den inte finns
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -53,11 +52,10 @@ def ta_bort_bolag(namn):
     conn.commit()
     conn.close()
 
-# Beräkna targetkurser och undervärdering
 def berakna_targetkurs(pe_vardena, ps_vardena, vinst_arsprognos, vinst_nastaar, nuvarande_kurs):
     genomsnitt_pe = sum(pe_vardena) / len(pe_vardena)
     genomsnitt_ps = sum(ps_vardena) / len(ps_vardena)
-    
+
     target_pe_ars = genomsnitt_pe * vinst_arsprognos if vinst_arsprognos and genomsnitt_pe else None
     target_pe_nastaar = genomsnitt_pe * vinst_nastaar if vinst_nastaar and genomsnitt_pe else None
 
@@ -104,7 +102,6 @@ def main():
 
     init_db()
 
-    # Formulär för att lägga till nytt bolag
     with st.form("form_lagg_till_bolag", clear_on_submit=True):
         namn = st.text_input("Bolagsnamn (unik)")
         nuvarande_kurs = st.number_input("Nuvarande kurs", min_value=0.0, format="%.2f")
@@ -141,7 +138,6 @@ def main():
                 st.success(f"Bolag '{namn}' sparat!")
                 st.experimental_rerun()
 
-    # Visa sparade bolag
     bolag = hamta_alla_bolag()
     if bolag:
         df = pd.DataFrame(
@@ -171,6 +167,12 @@ def main():
 
         df_target = pd.DataFrame(target_lista)
         df_display = pd.concat([df.reset_index(drop=True), df_target], axis=1)
+
+        # Checkbox för filtrering
+        visa_endast_undervarderade = st.checkbox("Visa bara bolag minst 30% undervärderade (genomsnitt target i år)")
+
+        if visa_endast_undervarderade:
+            df_display = df_display[df_display["undervardering_genomsnitt_ars"] >= 0.3]
 
         st.subheader("Alla sparade bolag")
         st.dataframe(
@@ -202,6 +204,13 @@ def main():
             })
         )
 
-        # Filter undervärderade bolag minst 30%
-        if st.checkbox("Visa bara bolag minst 30% undervärderade (genomsnitt target år i år)"):
-            undervarderade
+        # Ta bort bolag
+        st.subheader("Ta bort bolag")
+        namn_ta_bort = st.selectbox("Välj bolag att ta bort", df_display["namn"])
+        if st.button("Ta bort valt bolag"):
+            ta_bort_bolag(namn_ta_bort)
+            st.success(f"Bolag '{namn_ta_bort}' borttaget.")
+            st.experimental_rerun()
+
+if __name__ == "__main__":
+    main()

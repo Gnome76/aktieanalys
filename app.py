@@ -2,7 +2,7 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 
-DB_NAME = "bolag.db"
+DB_NAME = "/mnt/data/bolag.db"
 
 # Initiera databasen och skapa tabell om den inte finns
 def init_db():
@@ -55,22 +55,15 @@ def ta_bort_bolag(namn):
 
 # Beräkna targetkurser och undervärdering
 def berakna_targetkurs(pe_vardena, ps_vardena, vinst_arsprognos, vinst_nastaar, nuvarande_kurs):
-    # Genomsnitt P/E och P/S (över 4 senaste värden)
     genomsnitt_pe = sum(pe_vardena) / len(pe_vardena)
     genomsnitt_ps = sum(ps_vardena) / len(ps_vardena)
-    
-    # Targetkurser
+
     target_pe_ars = genomsnitt_pe * vinst_arsprognos if vinst_arsprognos and genomsnitt_pe else None
     target_pe_nastaar = genomsnitt_pe * vinst_nastaar if vinst_nastaar and genomsnitt_pe else None
 
-    # Target P/S (omsättningstillväxt räknas ej in i target direkt utan tar genomsnitt av PS-värden)
-    genomsnitt_ps_value = genomsnitt_ps
-    # Här kan du välja vilken omsättningstillväxt du vill använda om du vill inkludera den
-    # Men vi håller det enkelt nu
-    target_ps_ars = genomsnitt_ps_value * vinst_arsprognos if vinst_arsprognos and genomsnitt_ps_value else None
-    target_ps_nastaar = genomsnitt_ps_value * vinst_nastaar if vinst_nastaar and genomsnitt_ps_value else None
+    target_ps_ars = genomsnitt_ps * vinst_arsprognos if vinst_arsprognos and genomsnitt_ps else None
+    target_ps_nastaar = genomsnitt_ps * vinst_nastaar if vinst_nastaar and genomsnitt_ps else None
 
-    # Genomsnitt av target P/E och P/S för år i år och nästa år
     target_genomsnitt_ars = None
     target_genomsnitt_nastaar = None
     if target_pe_ars and target_ps_ars:
@@ -78,7 +71,6 @@ def berakna_targetkurs(pe_vardena, ps_vardena, vinst_arsprognos, vinst_nastaar, 
     if target_pe_nastaar and target_ps_nastaar:
         target_genomsnitt_nastaar = (target_pe_nastaar + target_ps_nastaar) / 2
 
-    # Undervärdering i procent = (targetkurs / nuvarande kurs) - 1
     undervardering_ars = None
     undervardering_nastaar = None
     undervardering_genomsnitt_ars = None
@@ -148,12 +140,11 @@ def main():
                 )
                 spara_bolag(data)
                 st.success(f"Bolag '{namn}' sparat!")
-                st.rerun()
+                st.experimental_rerun()
 
     # Visa sparade bolag
     bolag = hamta_alla_bolag()
     if bolag:
-        # Skapa DataFrame
         df = pd.DataFrame(
             bolag,
             columns=[
@@ -168,7 +159,6 @@ def main():
             ],
         )
 
-        # Beräkna target och undervärdering för varje bolag
         target_lista = []
         for _, row in df.iterrows():
             resultat = berakna_targetkurs(
@@ -182,7 +172,6 @@ def main():
 
         df_target = pd.DataFrame(target_lista)
 
-        # Slå ihop med originaldf
         df_display = pd.concat([df.reset_index(drop=True), df_target], axis=1)
 
         st.subheader("Alla sparade bolag")
@@ -213,7 +202,6 @@ def main():
             "undervardering_genomsnitt_nastaar": "{:.0%}",
         }))
 
-        # Filter för undervärderade bolag minst 30%
         if st.checkbox("Visa bara bolag minst 30% undervärderade (genomsnitt target år i år)"):
             undervarderade = df_display[
                 (df_display["undervardering_genomsnitt_ars"] >= 0.3)
@@ -243,13 +231,12 @@ def main():
             else:
                 st.info("Inga bolag är minst 30% undervärderade just nu.")
 
-        # Ta bort bolag - dropdown och knapp
         st.subheader("Ta bort bolag")
         namn_radera = st.selectbox("Välj bolag att ta bort", options=df["namn"])
         if st.button("Ta bort valt bolag"):
             ta_bort_bolag(namn_radera)
             st.success(f"Bolag '{namn_radera}' borttaget.")
-            st.rerun()
+            st.experimental_rerun()
 
     else:
         st.info("Inga bolag sparade ännu.")

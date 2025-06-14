@@ -7,6 +7,8 @@ DB_NAME = "aktier.db"
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
+    # ⚠️ Tar bort tabellen om den finns (nollställer allt)
+    c.execute("DROP TABLE IF EXISTS bolag")
     c.execute("""
         CREATE TABLE IF NOT EXISTS bolag (
             namn TEXT PRIMARY KEY,

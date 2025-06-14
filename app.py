@@ -1,6 +1,5 @@
 import streamlit as st
 import sqlite3
-import pandas as pd
 from datetime import datetime
 
 DB_NAME = "bolag.db"
@@ -104,42 +103,6 @@ def ta_bort_bolag(namn):
     conn.commit()
     conn.close()
 
-def berakna_targetkurs(pe_vardena, ps_vardena, vinst_arsprognos, vinst_nastaar, nuvarande_kurs):
-    genomsnitt_pe = sum(pe_vardena) / len(pe_vardena)
-    genomsnitt_ps = sum(ps_vardena) / len(ps_vardena)
-
-    target_pe_ars = genomsnitt_pe * vinst_arsprognos if vinst_arsprognos else None
-    target_pe_nastaar = genomsnitt_pe * vinst_nastaar if vinst_nastaar else None
-    target_ps_ars = genomsnitt_ps * vinst_arsprognos if vinst_arsprognos else None
-    target_ps_nastaar = genomsnitt_ps * vinst_nastaar if vinst_nastaar else None
-
-    target_genomsnitt_ars = None
-    target_genomsnitt_nastaar = None
-    if target_pe_ars and target_ps_ars:
-        target_genomsnitt_ars = (target_pe_ars + target_ps_ars) / 2
-    if target_pe_nastaar and target_ps_nastaar:
-        target_genomsnitt_nastaar = (target_pe_nastaar + target_ps_nastaar) / 2
-
-    undervardering_genomsnitt_ars = None
-    undervardering_genomsnitt_nastaar = None
-
-    if nuvarande_kurs and target_genomsnitt_ars:
-        undervardering_genomsnitt_ars = (target_genomsnitt_ars / nuvarande_kurs) - 1
-    if nuvarande_kurs and target_genomsnitt_nastaar:
-        undervardering_genomsnitt_nastaar = (target_genomsnitt_nastaar / nuvarande_kurs) - 1
-
-    kopvard_ars = target_genomsnitt_ars * 0.7 if target_genomsnitt_ars else None
-    kopvard_nastaar = target_genomsnitt_nastaar * 0.7 if target_genomsnitt_nastaar else None
-
-    return {
-        "target_genomsnitt_ars": target_genomsnitt_ars,
-        "target_genomsnitt_nastaar": target_genomsnitt_nastaar,
-        "undervardering_genomsnitt_ars": undervardering_genomsnitt_ars,
-        "undervardering_genomsnitt_nastaar": undervardering_genomsnitt_nastaar,
-        "kopvard_ars": kopvard_ars,
-        "kopvard_nastaar": kopvard_nastaar
-    }
-
 def main():
     st.title("Aktieinnehav – Spara, redigera och analysera")
     init_db()
@@ -172,5 +135,62 @@ def main():
                 data = {
                     "namn": namn.strip(),
                     "nuvarande_kurs": nuvarande_kurs,
-                    "pe1": pe1, "pe2": pe2, "pe3": pe3, "pe4": pe4,
-                   
+                    "pe1": pe1,
+                    "pe2": pe2,
+                    "pe3": pe3,
+                    "pe4": pe4,
+                    "ps1": ps1,
+                    "ps2": ps2,
+                    "ps3": ps3,
+                    "ps4": ps4,
+                    "vinst_arsprognos": vinst_arsprognos,
+                    "vinst_nastaar": vinst_nastaar,
+                    "omsattningstillvaxt_arsprognos": omsattningstillvaxt_arsprognos,
+                    "omsattningstillvaxt_nastaar": omsattningstillvaxt_nastaar,
+                    "insatt_datum": nu,
+                    "senast_andrad": nu
+                }
+                spara_bolag(data, redigera=False)
+                st.success(f"Bolaget '{namn.strip()}' har lagts till.")
+
+    # Redigera bolag
+    st.header("Redigera befintligt bolag")
+    bolag_lista = [row[0] for row in hamta_alla_bolag()]
+    valt_bolag = st.selectbox("Välj bolag att redigera", bolag_lista)
+    if valt_bolag:
+        # Hämta data för valt bolag
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute("SELECT * FROM bolag WHERE namn = ?", (valt_bolag,))
+        rad = c.fetchone()
+        conn.close()
+        if rad:
+            (
+                namn, nuvarande_kurs,
+                pe1, pe2, pe3, pe4,
+                ps1, ps2, ps3, ps4,
+                vinst_arsprognos, vinst_nastaar,
+                omsattningstillvaxt_arsprognos, omsattningstillvaxt_nastaar,
+                insatt_datum, senast_andrad
+            ) = rad
+            with st.form("form_redigera_bolag"):
+                nuvarande_kurs = st.number_input("Nuvarande kurs", min_value=0.0, format="%.2f", value=nuvarande_kurs)
+                pe1 = st.number_input("P/E (år 1)", min_value=0.0, format="%.2f", value=pe1)
+                pe2 = st.number_input("P/E (år 2)", min_value=0.0, format="%.2f", value=pe2)
+                pe3 = st.number_input("P/E (år 3)", min_value=0.0, format="%.2f", value=pe3)
+                pe4 = st.number_input("P/E (år 4)", min_value=0.0, format="%.2f", value=pe4)
+                ps1 = st.number_input("P/S (år 1)", min_value=0.0, format="%.2f", value=ps1)
+                ps2 = st.number_input("P/S (år 2)", min_value=0.0, format="%.2f", value=ps2)
+                ps3 = st.number_input("P/S (år 3)", min_value=0.0, format="%.2f", value=ps3)
+                ps4 = st.number_input("P/S (år 4)", min_value=0.0, format="%.2f", value=ps4)
+                vinst_arsprognos = st.number_input("Vinst prognos i år", format="%.2f", value=vinst_arsprognos)
+                vinst_nastaar = st.number_input("Vinst prognos nästa år", format="%.2f", value=vinst_nastaar)
+                omsattningstillvaxt_arsprognos = st.number_input("Omsättningstillväxt i år (%)", format="%.2f", value=omsattningstillvaxt_arsprognos)
+                omsattningstillvaxt_nastaar = st.number_input("Omsättningstillväxt nästa år (%)", format="%.2f", value=omsattningstillvaxt_nastaar)
+
+                uppdatera = st.form_submit_button("Uppdatera bolag")
+                if uppdatera:
+                    nu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    data = {
+                        "namn": namn,
+                        "

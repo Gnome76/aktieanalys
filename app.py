@@ -55,22 +55,36 @@ def ta_bort_bolag(namn):
 
 # Beräkna targetkurser och undervärdering
 def berakna_targetkurs(pe_vardena, ps_vardena, vinst_arsprognos, vinst_nastaar, nuvarande_kurs):
-    genomsnitt_pe = sum(pe_vardena) / len(pe_vardena)
-    genomsnitt_ps = sum(ps_vardena) / len(ps_vardena)
-
+    genomsnitt_pe = sum(pe_vardena) / len(pe_vardena) if all(pe_vardena) else None
+    genomsnitt_ps = sum(ps_vardena) / len(ps_vardena) if all(ps_vardena) else None
+    
     target_pe_ars = genomsnitt_pe * vinst_arsprognos if vinst_arsprognos and genomsnitt_pe else None
     target_pe_nastaar = genomsnitt_pe * vinst_nastaar if vinst_nastaar and genomsnitt_pe else None
 
     target_ps_ars = genomsnitt_ps * vinst_arsprognos if vinst_arsprognos and genomsnitt_ps else None
     target_ps_nastaar = genomsnitt_ps * vinst_nastaar if vinst_nastaar and genomsnitt_ps else None
 
-    target_genomsnitt_ars = (target_pe_ars + target_ps_ars) / 2 if target_pe_ars and target_ps_ars else None
-    target_genomsnitt_nastaar = (target_pe_nastaar + target_ps_nastaar) / 2 if target_pe_nastaar and target_ps_nastaar else None
+    target_genomsnitt_ars = None
+    target_genomsnitt_nastaar = None
+    if target_pe_ars and target_ps_ars:
+        target_genomsnitt_ars = (target_pe_ars + target_ps_ars) / 2
+    if target_pe_nastaar and target_ps_nastaar:
+        target_genomsnitt_nastaar = (target_pe_nastaar + target_ps_nastaar) / 2
 
-    undervardering_ars = (target_pe_ars / nuvarande_kurs) - 1 if nuvarande_kurs and target_pe_ars else None
-    undervardering_nastaar = (target_pe_nastaar / nuvarande_kurs) - 1 if nuvarande_kurs and target_pe_nastaar else None
-    undervardering_genomsnitt_ars = (target_genomsnitt_ars / nuvarande_kurs) - 1 if nuvarande_kurs and target_genomsnitt_ars else None
-    undervardering_genomsnitt_nastaar = (target_genomsnitt_nastaar / nuvarande_kurs) - 1 if nuvarande_kurs and target_genomsnitt_nastaar else None
+    undervardering_ars = None
+    undervardering_nastaar = None
+    undervardering_genomsnitt_ars = None
+    undervardering_genomsnitt_nastaar = None
+
+    if nuvarande_kurs and target_pe_ars:
+        undervardering_ars = (target_pe_ars / nuvarande_kurs) - 1
+    if nuvarande_kurs and target_pe_nastaar:
+        undervardering_nastaar = (target_pe_nastaar / nuvarande_kurs) - 1
+
+    if nuvarande_kurs and target_genomsnitt_ars:
+        undervardering_genomsnitt_ars = (target_genomsnitt_ars / nuvarande_kurs) - 1
+    if nuvarande_kurs and target_genomsnitt_nastaar:
+        undervardering_genomsnitt_nastaar = (target_genomsnitt_nastaar / nuvarande_kurs) - 1
 
     return {
         "target_pe_ars": target_pe_ars,
@@ -144,7 +158,6 @@ def main():
             ],
         )
 
-        # Beräkna target och undervärdering
         target_lista = []
         for _, row in df.iterrows():
             resultat = berakna_targetkurs(
@@ -157,6 +170,7 @@ def main():
             target_lista.append(resultat)
 
         df_target = pd.DataFrame(target_lista)
+
         df_display = pd.concat([df.reset_index(drop=True), df_target], axis=1)
 
         st.subheader("Alla sparade bolag")
@@ -177,21 +191,4 @@ def main():
             "nuvarande_kurs": "{:.2f}",
             "target_pe_ars": "{:.2f}",
             "target_pe_nastaar": "{:.2f}",
-            "target_ps_ars": "{:.2f}",
-            "target_ps_nastaar": "{:.2f}",
-            "target_genomsnitt_ars": "{:.2f}",
-            "target_genomsnitt_nastaar": "{:.2f}",
-            "undervardering_pe_ars": "{:.0%}",
-            "undervardering_pe_nastaar": "{:.0%}",
-            "undervardering_genomsnitt_ars": "{:.0%}",
-            "undervardering_genomsnitt_nastaar": "{:.0%}",
-        }))
-
-        if st.checkbox("Visa bara bolag minst 30 % undervärderade (genomsnitt i år)"):
-            df_filter = df_display[df_display["undervardering_genomsnitt_ars"] >= 0.3]
-            st.subheader("Undervärderade bolag")
-            st.dataframe(
-                df_filter[
-                    [
-                        "namn",
-                        "nuvarande_k
+            "target_ps_ars":

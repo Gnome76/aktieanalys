@@ -2,7 +2,7 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 
-DB_NAME = "aktier_v2.db"  # ändrat!
+DB_NAME = "aktier_v3.db"  # ändrat!
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)

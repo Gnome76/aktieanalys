@@ -1,113 +1,3 @@
-import streamlit as st
-import sqlite3
-import pandas as pd
-
-DB_NAME = "bolag.db"
-
-# Initiera databasen och skapa tabell om den inte finns
-def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS bolag (
-            namn TEXT PRIMARY KEY,
-            nuvarande_kurs REAL,
-            pe1 REAL,
-            pe2 REAL,
-            pe3 REAL,
-            pe4 REAL,
-            ps1 REAL,
-            ps2 REAL,
-            ps3 REAL,
-            ps4 REAL,
-            vinst_arsprognos REAL,
-            vinst_nastaar REAL,
-            omsattningstillvaxt_arsprognos REAL,
-            omsattningstillvaxt_nastaar REAL
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-def spara_bolag(data):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("""
-        INSERT OR REPLACE INTO bolag VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, data)
-    conn.commit()
-    conn.close()
-
-def hamta_alla_bolag():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT * FROM bolag ORDER BY namn COLLATE NOCASE ASC")
-    rows = c.fetchall()
-    conn.close()
-    return rows
-
-def ta_bort_bolag(namn):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("DELETE FROM bolag WHERE namn = ?", (namn,))
-    conn.commit()
-    conn.close()
-
-# Beräkna targetkurser och undervärdering
-def berakna_targetkurs(pe_vardena, ps_vardena, vinst_arsprognos, vinst_nastaar, nuvarande_kurs):
-    # Genomsnitt P/E och P/S (över 4 senaste värden)
-    genomsnitt_pe = sum(pe_vardena) / len(pe_vardena)
-    genomsnitt_ps = sum(ps_vardena) / len(ps_vardena)
-    
-    # Targetkurser
-    target_pe_ars = genomsnitt_pe * vinst_arsprognos if vinst_arsprognos and genomsnitt_pe else None
-    target_pe_nastaar = genomsnitt_pe * vinst_nastaar if vinst_nastaar and genomsnitt_pe else None
-
-    # Target P/S (omsättningstillväxt räknas ej in i target direkt utan tar genomsnitt av PS-värden)
-    genomsnitt_ps_value = genomsnitt_ps
-    # Här kan du välja vilken omsättningstillväxt du vill använda om du vill inkludera den
-    # Men vi håller det enkelt nu
-    target_ps_ars = genomsnitt_ps_value * vinst_arsprognos if vinst_arsprognos and genomsnitt_ps_value else None
-    target_ps_nastaar = genomsnitt_ps_value * vinst_nastaar if vinst_nastaar and genomsnitt_ps_value else None
-
-    # Genomsnitt av target P/E och P/S för år i år och nästa år
-    target_genomsnitt_ars = None
-    target_genomsnitt_nastaar = None
-    if target_pe_ars and target_ps_ars:
-        target_genomsnitt_ars = (target_pe_ars + target_ps_ars) / 2
-    if target_pe_nastaar and target_ps_nastaar:
-        target_genomsnitt_nastaar = (target_pe_nastaar + target_ps_nastaar) / 2
-
-    # Undervärdering i procent = (targetkurs / nuvarande kurs) - 1
-    undervardering_ars = None
-    undervardering_nastaar = None
-    undervardering_genomsnitt_ars = None
-    undervardering_genomsnitt_nastaar = None
-
-    if nuvarande_kurs and target_pe_ars:
-        undervardering_ars = (target_pe_ars / nuvarande_kurs) - 1
-    if nuvarande_kurs and target_pe_nastaar:
-        undervardering_nastaar = (target_pe_nastaar / nuvarande_kurs) - 1
-
-    if nuvarande_kurs and target_genomsnitt_ars:
-        undervardering_genomsnitt_ars = (target_genomsnitt_ars / nuvarande_kurs) - 1
-    if nuvarande_kurs and target_genomsnitt_nastaar:
-        undervardering_genomsnitt_nastaar = (target_genomsnitt_nastaar / nuvarande_kurs) - 1
-
-    return {
-        "target_pe_ars": target_pe_ars,
-        "target_pe_nastaar": target_pe_nastaar,
-        "target_ps_ars": target_ps_ars,
-        "target_ps_nastaar": target_ps_nastaar,
-        "target_genomsnitt_ars": target_genomsnitt_ars,
-        "target_genomsnitt_nastaar": target_genomsnitt_nastaar,
-        "undervardering_pe_ars": undervardering_ars,
-        "undervardering_pe_nastaar": undervardering_nastaar,
-        "undervardering_genomsnitt_ars": undervardering_genomsnitt_ars,
-        "undervardering_genomsnitt_nastaar": undervardering_genomsnitt_nastaar,
-    }
-
-
 def main():
     st.title("Aktieinnehav - Spara och analysera")
 
@@ -153,7 +43,6 @@ def main():
     # Visa sparade bolag
     bolag = hamta_alla_bolag()
     if bolag:
-        # Skapa DataFrame
         df = pd.DataFrame(
             bolag,
             columns=[
@@ -168,7 +57,12 @@ def main():
             ],
         )
 
-        # Beräkna target och undervärdering för varje bolag
+        # Sökfunktion
+        sok_text = st.text_input("Sök bolag (namn)")
+        if sok_text:
+            df = df[df["namn"].str.contains(sok_text, case=False, na=False)]
+
+        # Beräkna target och undervärdering
         target_lista = []
         for _, row in df.iterrows():
             resultat = berakna_targetkurs(
@@ -181,8 +75,6 @@ def main():
             target_lista.append(resultat)
 
         df_target = pd.DataFrame(target_lista)
-
-        # Slå ihop med originaldf
         df_display = pd.concat([df.reset_index(drop=True), df_target], axis=1)
 
         st.subheader("Alla sparade bolag")
@@ -253,6 +145,3 @@ def main():
 
     else:
         st.info("Inga bolag sparade ännu.")
-
-if __name__ == "__main__":
-    main()

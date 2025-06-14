@@ -158,7 +158,6 @@ def main():
     bolag_lista = [row[0] for row in hamta_alla_bolag()]
     valt_bolag = st.selectbox("Välj bolag att redigera", bolag_lista)
     if valt_bolag:
-        # Hämta data för valt bolag
         conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
         c.execute("SELECT * FROM bolag WHERE namn = ?", (valt_bolag,))
@@ -193,4 +192,34 @@ def main():
                     nu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     data = {
                         "namn": namn,
-                        "
+                        "nuvarande_kurs": nuvarande_kurs,
+                        "pe1": pe1,
+                        "pe2": pe2,
+                        "pe3": pe3,
+                        "pe4": pe4,
+                        "ps1": ps1,
+                        "ps2": ps2,
+                        "ps3": ps3,
+                        "ps4": ps4,
+                        "vinst_arsprognos": vinst_arsprognos,
+                        "vinst_nastaar": vinst_nastaar,
+                        "omsattningstillvaxt_arsprognos": omsattningstillvaxt_arsprognos,
+                        "omsattningstillvaxt_nastaar": omsattningstillvaxt_nastaar,
+                        "insatt_datum": insatt_datum,
+                        "senast_andrad": nu
+                    }
+                    spara_bolag(data, redigera=True)
+                    st.success(f"Bolaget '{namn}' har uppdaterats.")
+
+    # Ta bort bolag
+    st.header("Ta bort bolag")
+    bolag_lista_ta_bort = [row[0] for row in hamta_alla_bolag()]
+    valt_bolag_ta_bort = st.selectbox("Välj bolag att ta bort", bolag_lista_ta_bort, key="ta_bort")
+    if valt_bolag_ta_bort:
+        if st.button(f"Ta bort bolaget '{valt_bolag_ta_bort}'"):
+            ta_bort_bolag(valt_bolag_ta_bort)
+            st.success(f"Bolaget '{valt_bolag_ta_bort}' är borttaget.")
+            st.experimental_rerun()
+
+if __name__ == "__main__":
+    main()

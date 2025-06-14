@@ -31,6 +31,12 @@ def init_db():
     conn.commit()
     conn.close()
 
+# Manuell migrering (körs via knapp i UI)
+def migrera_db():
+    st.info("Migrering: Skapar tabell om den inte finns.")
+    init_db()
+    st.success("Migrering klar!")
+
 def spara_bolag(data):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -94,6 +100,12 @@ def berakna_targetkurs(pe_vardena, ps_vardena, vinst_arsprognos, vinst_nastaar, 
 
 def main():
     st.title("Aktieinnehav – Spara och analysera")
+
+    # Knapp för manuell migrering
+    if st.button("⚙️ Migrera databas (skapa tabell om saknas)"):
+        migrera_db()
+
+    # Initiera databas automatiskt också för säkerhets skull
     init_db()
 
     # Formulär för att lägga till nytt bolag
@@ -161,40 +173,54 @@ def main():
         df_target = pd.DataFrame(resultats)
         df_display = pd.concat([df.reset_index(drop=True), df_target], axis=1)
 
-        st.subheader("Undervärderade bolag (≥30%)")
-        undervarderade = df_display[
-            (df_display["undervardering_genomsnitt_ars"] >= 0.3) |
-            (df_display["undervardering_genomsnitt_nastaar"] >= 0.3)
-        ].sort_values(
-            by=["undervardering_genomsnitt_ars", "undervardering_genomsnitt_nastaar"],
-            ascending=False
-        ).reset_index(drop=True)
+        # Lägg till kolumn med bästa undervärdering (max av år och nästa års undervärdering)
+        def max_undervardering(row):
+            vals = [row["undervardering_genomsnitt_ars"], row["undervardering_genomsnitt_nastaar"]]
+            vals = [v for v in vals if v is not None]
+            if vals:
+                return max(vals)
+            return None
 
-        if undervarderade.empty:
-            st.info("Inga bolag är minst 30 % undervärderade just nu.")
-        else:
-            st.session_state.idx = st.session_state.get("idx", 0)
-            total = len(undervarderade)
+        df_display["basta_undervardering"] = df_display.apply(max_undervardering, axis=1)
 
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if st.button("⬅️ Föregående") and st.session_state.idx > 0:
-                    st.session_state.idx -= 1
-            with col3:
-                if st.button("Nästa ➡️") and st.session_state.idx < total - 1:
-                    st.session_state.idx += 1
+        # Sortera i fallande ordning efter bästa undervärdering
+        df_display = df_display.sort_values(by="basta_undervardering", ascending=False).reset_index(drop=True)
 
-            bolag = undervarderade.iloc[st.session_state.idx]
+        st.subheader("Bolagsvärdering sorterade efter värdering")
 
-            st.markdown(f"### {bolag['namn']}")
-            st.write(f"**Nuvarande kurs:** {bolag['nuvarande_kurs']:.2f} kr")
-            st.write(f"**Targetkurs år:** {bolag['target_genomsnitt_ars']:.2f} kr")
-            st.write(f"**Targetkurs nästa år:** {bolag['target_genomsnitt_nastaar']:.2f} kr")
-            st.write(f"**Undervärdering i år:** {bolag['undervardering_genomsnitt_ars']:.0%}")
-            st.write(f"**Undervärdering nästa år:** {bolag['undervardering_genomsnitt_nastaar']:.0%}")
-            st.write(f"**Köpvärd upp till (i år):** {bolag['kopvard_ars']:.2f} kr")
-            st.write(f"**Köpvärd upp till (nästa år):** {bolag['kopvard_nastaar']:.2f} kr")
-            st.caption(f"Bolag {st.session_state.idx + 1} av {total}")
+        st.session_state.idx = st.session_state.get("idx", 0)
+        total = len(df_display)
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("⬅️ Föregående") and st.session_state.idx > 0:
+                st.session_state.idx -= 1
+        with col3:
+            if st.button("Nästa ➡️") and st.session_state.idx < total - 1:
+                st.session_state.idx += 1
+
+        bolag = df_display.iloc[st.session_state.idx]
+
+        undervarderingars = bolag["undervardering_genomsnitt_ars"]
+        undervarderingnastaar = bolag["undervardering_genomsnitt_nastaar"]
+
+        def format_vardering(undervardering):
+            if undervardering is None:
+                return "N/A"
+            elif undervardering >= 0:
+                return f"Undervärderad med {undervardering:.0%}"
+            else:
+                return f"Övervärderad med {abs(undervardering):.0%}"
+
+        st.markdown(f"### {bolag['namn']}")
+        st.write(f"**Nuvarande kurs:** {bolag['nuvarande_kurs']:.2f} kr")
+        st.write(f"**Targetkurs år:** {bolag['target_genomsnitt_ars']:.2f} kr")
+        st.write(f"**Targetkurs nästa år:** {bolag['target_genomsnitt_nastaar']:.2f} kr")
+        st.write(f"**Värdering i år:** {format_vardering(undervarderingars)}")
+        st.write(f"**Värdering nästa år:** {format_vardering(undervarderingnastaar)}")
+        st.write(f"**Köpvärd upp till (i år):** {bolag['kopvard_ars']:.2f} kr")
+        st.write(f"**Köpvärd upp till (nästa år):** {bolag['kopvard_nastaar']:.2f} kr")
+        st.caption(f"Bolag {st.session_state.idx + 1} av {total}")
 
         # Ta bort bolag
         st.subheader("Ta bort bolag")
@@ -209,10 +235,4 @@ def main():
 
         if st.button("🗑️ Ta bort valt bolag"):
             ta_bort_bolag(namn_map[namn_radera_datum])
-            st.success(f"Bolag '{namn_map[namn_radera_datum]}' borttaget.")
-
-    else:
-        st.info("Inga bolag sparade ännu.")
-
-if __name__ == "__main__":
-    main()
+            st.success(f"Bolag '{nam

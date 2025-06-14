@@ -37,6 +37,7 @@ def hamta_alla_bolag():
     return rows
 
 def main():
+     st.write("App startar...")
     st.title("Aktieinnehav - Testapp")
 
     st.write("Initierar databas...")

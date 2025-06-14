@@ -71,19 +71,10 @@ def berakna_targetkurs(pe_vardena, ps_vardena, vinst_arsprognos, vinst_nastaar, 
     if target_pe_nastaar and target_ps_nastaar:
         target_genomsnitt_nastaar = (target_pe_nastaar + target_ps_nastaar) / 2
 
-    undervardering_ars = None
-    undervardering_nastaar = None
-    undervardering_genomsnitt_ars = None
-    undervardering_genomsnitt_nastaar = None
-
-    if nuvarande_kurs and target_pe_ars:
-        undervardering_ars = (target_pe_ars / nuvarande_kurs) - 1
-    if nuvarande_kurs and target_pe_nastaar:
-        undervardering_nastaar = (target_pe_nastaar / nuvarande_kurs) - 1
-    if nuvarande_kurs and target_genomsnitt_ars:
-        undervardering_genomsnitt_ars = (target_genomsnitt_ars / nuvarande_kurs) - 1
-    if nuvarande_kurs and target_genomsnitt_nastaar:
-        undervardering_genomsnitt_nastaar = (target_genomsnitt_nastaar / nuvarande_kurs) - 1
+    undervardering_ars = (target_pe_ars / nuvarande_kurs - 1) if nuvarande_kurs and target_pe_ars else None
+    undervardering_nastaar = (target_pe_nastaar / nuvarande_kurs - 1) if nuvarande_kurs and target_pe_nastaar else None
+    undervardering_genomsnitt_ars = (target_genomsnitt_ars / nuvarande_kurs - 1) if nuvarande_kurs and target_genomsnitt_ars else None
+    undervardering_genomsnitt_nastaar = (target_genomsnitt_nastaar / nuvarande_kurs - 1) if nuvarande_kurs and target_genomsnitt_nastaar else None
 
     return {
         "target_pe_ars": target_pe_ars,
@@ -103,6 +94,7 @@ def main():
 
     init_db()
 
+    # Formulär för att lägga till nytt bolag
     with st.form("form_lagg_till_bolag", clear_on_submit=True):
         namn = st.text_input("Bolagsnamn (unik)")
         nuvarande_kurs = st.number_input("Nuvarande kurs", min_value=0.0, format="%.2f")
@@ -167,28 +159,36 @@ def main():
             target_lista.append(resultat)
 
         df_target = pd.DataFrame(target_lista)
+
         df_display = pd.concat([df.reset_index(drop=True), df_target], axis=1)
 
         st.subheader("Alla sparade bolag")
-        st.dataframe(df_display[[
-            "namn",
-            "nuvarande_kurs",
-            "target_pe_ars",
-            "target_pe_nastaar",
-            "target_ps_ars",
-            "target_ps_nastaar",
-            "target_genomsnitt_ars",
-            "target_genomsnitt_nastaar",
-            "undervardering_pe_ars",
-            "undervardering_pe_nastaar",
-            "undervardering_genomsnitt_ars",
-            "undervardering_genomsnitt_nastaar",
-        ]].style.format({
-            "nuvarande_kurs": "{:.2f}",
-            "target_pe_ars": "{:.2f}",
-            "target_pe_nastaar": "{:.2f}",
-            "target_ps_ars": "{:.2f}",
-            "target_ps_nastaar": "{:.2f}",
-            "target_genomsnitt_ars": "{:.2f}",
-            "target_genomsnitt_nastaar": "{:.2f}",
-            "undervardering_pe
+        st.dataframe(
+            df_display[
+                [
+                    "namn",
+                    "nuvarande_kurs",
+                    "target_pe_ars",
+                    "target_pe_nastaar",
+                    "target_ps_ars",
+                    "target_ps_nastaar",
+                    "target_genomsnitt_ars",
+                    "target_genomsnitt_nastaar",
+                    "undervardering_pe_ars",
+                    "undervardering_pe_nastaar",
+                    "undervardering_genomsnitt_ars",
+                    "undervardering_genomsnitt_nastaar",
+                ]
+            ].style.format(
+                {
+                    "nuvarande_kurs": "{:.2f}",
+                    "target_pe_ars": "{:.2f}",
+                    "target_pe_nastaar": "{:.2f}",
+                    "target_ps_ars": "{:.2f}",
+                    "target_ps_nastaar": "{:.2f}",
+                    "target_genomsnitt_ars": "{:.2f}",
+                    "target_genomsnitt_nastaar": "{:.2f}",
+                    "undervardering_pe_ars": "{:.2%}",
+                    "undervardering_pe_nastaar": "{:.2%}",
+                    "undervardering_genomsnitt_ars": "{:.2%}",
+                    "undervardering_genomsnitt_nastaar": "{:.2%}",

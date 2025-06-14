@@ -1,10 +1,11 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
+from datetime import datetime
 
 DB_NAME = "bolag.db"
 
-# Initiera databasen och skapa tabell om den inte finns
+# Initiera databasen och skapa tabell med datum
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -23,18 +24,20 @@ def init_db():
             vinst_arsprognos REAL,
             vinst_nastaar REAL,
             omsattningstillvaxt_arsprognos REAL,
-            omsattningstillvaxt_nastaar REAL
+            omsattningstillvaxt_nastaar REAL,
+            datum_inlagd TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
     conn.commit()
     conn.close()
 
 def spara_bolag(data):
+    datum_inlagd = datetime.now().strftime("%Y-%m-%d %H:%M")
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("""
-        INSERT OR REPLACE INTO bolag VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, data)
+        INSERT OR REPLACE INTO bolag VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, data + (datum_inlagd,))
     conn.commit()
     conn.close()
 
@@ -53,7 +56,6 @@ def ta_bort_bolag(namn):
     conn.commit()
     conn.close()
 
-# Beräkna targetkurser och undervärdering
 def berakna_targetkurs(pe_vardena, ps_vardena, vinst_arsprognos, vinst_nastaar, nuvarande_kurs):
     genomsnitt_pe = sum(pe_vardena) / len(pe_vardena)
     genomsnitt_ps = sum(ps_vardena) / len(ps_vardena)
@@ -63,20 +65,11 @@ def berakna_targetkurs(pe_vardena, ps_vardena, vinst_arsprognos, vinst_nastaar, 
     target_ps_ars = genomsnitt_ps * vinst_arsprognos if vinst_arsprognos else None
     target_ps_nastaar = genomsnitt_ps * vinst_nastaar if vinst_nastaar else None
 
-    target_genomsnitt_ars = None
-    target_genomsnitt_nastaar = None
-    if target_pe_ars and target_ps_ars:
-        target_genomsnitt_ars = (target_pe_ars + target_ps_ars) / 2
-    if target_pe_nastaar and target_ps_nastaar:
-        target_genomsnitt_nastaar = (target_pe_nastaar + target_ps_nastaar) / 2
+    target_genomsnitt_ars = (target_pe_ars + target_ps_ars) / 2 if target_pe_ars and target_ps_ars else None
+    target_genomsnitt_nastaar = (target_pe_nastaar + target_ps_nastaar) / 2 if target_pe_nastaar and target_ps_nastaar else None
 
-    undervardering_genomsnitt_ars = None
-    undervardering_genomsnitt_nastaar = None
-
-    if nuvarande_kurs and target_genomsnitt_ars:
-        undervardering_genomsnitt_ars = (target_genomsnitt_ars / nuvarande_kurs) - 1
-    if nuvarande_kurs and target_genomsnitt_nastaar:
-        undervardering_genomsnitt_nastaar = (target_genomsnitt_nastaar / nuvarande_kurs) - 1
+    undervardering_genomsnitt_ars = (target_genomsnitt_ars / nuvarande_kurs - 1) if nuvarande_kurs and target_genomsnitt_ars else None
+    undervardering_genomsnitt_nastaar = (target_genomsnitt_nastaar / nuvarande_kurs - 1) if nuvarande_kurs and target_genomsnitt_nastaar else None
 
     kopvard_ars = target_genomsnitt_ars * 0.7 if target_genomsnitt_ars else None
     kopvard_nastaar = target_genomsnitt_nastaar * 0.7 if target_genomsnitt_nastaar else None
@@ -94,7 +87,6 @@ def main():
     st.title("Aktieinnehav – Spara och analysera")
     init_db()
 
-    # Formulär för att lägga till nytt bolag
     with st.form("form_lagg_till_bolag", clear_on_submit=True):
         namn = st.text_input("Bolagsnamn (unik)")
         nuvarande_kurs = st.number_input("Nuvarande kurs", min_value=0.0, format="%.2f")
@@ -140,7 +132,8 @@ def main():
                 "pe1", "pe2", "pe3", "pe4",
                 "ps1", "ps2", "ps3", "ps4",
                 "vinst_arsprognos", "vinst_nastaar",
-                "omsattningstillvaxt_arsprognos", "omsattningstillvaxt_nastaar"
+                "omsattningstillvaxt_arsprognos", "omsattningstillvaxt_nastaar",
+                "datum_inlagd"
             ]
         )
 
@@ -193,14 +186,25 @@ def main():
             st.write(f"**Köpvärd upp till (nästa år):** {bolag['kopvard_nastaar']:.2f} kr")
             st.caption(f"Bolag {st.session_state.idx + 1} av {total}")
 
-        # Ta bort bolag
         st.subheader("Ta bort bolag")
-        namn_radera = st.selectbox("Välj bolag att ta bort", options=df["namn"])
-        if st.button("Ta bort valt bolag"):
+
+        # Ta bort via bokstavsordning
+        namn_radera = st.selectbox("Välj bolag att ta bort (A–Ö)", options=df["namn"].sort_values())
+        if st.button("Ta bort (bokstavsordning)"):
             ta_bort_bolag(namn_radera)
             st.success(f"Bolag '{namn_radera}' borttaget.")
             st.query_params["refresh"] = "1"
 
+        # Ta bort via datumordning
+        df_datum = df.copy()
+        df_datum["datum_inlagd"] = pd.to_datetime(df_datum["datum_inlagd"])
+        df_datum = df_datum.sort_values("datum_inlagd")
+
+        namn_radera_datum = st.selectbox("Välj bolag att ta bort (äldst först)", options=df_datum["namn"])
+        if st.button("Ta bort (datumordning)"):
+            ta_bort_bolag(namn_radera_datum)
+            st.success(f"Bolag '{namn_radera_datum}' borttaget.")
+            st.query_params["refresh"] = "1"
     else:
         st.info("Inga bolag sparade ännu.")
 
